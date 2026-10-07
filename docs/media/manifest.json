@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "source": {
+    "filename": "demo-cosmos-orin-reachy-oneshot-Oct2.mp4",
+    "creator": "Alex Sotelo",
+    "recorded_date": "2026-10-02",
+    "sha256": "9b380c780564e648dd97628dcf5a43a90d17bcd12d5ce55743115ab170f03b1b",
+    "duration_seconds": 225
+  },
+  "treatment": "Authentic cropped screenshots and silent GIF excerpts. Generated captions and original playback speed are preserved. These selected examples are not an accuracy benchmark.",
+  "files": [
+    {
+      "file": "webcam-caption-00m45s.png",
+      "source_seconds": 45,
+      "crop_filter": "crop=1156:552:86:111",
+      "bytes": 317306,
+      "sha256": "64eb885e8ee0e78c13cfd73801e83b2bdd44046f7822f1d2141264aa3930669c",
+      "dimensions": {
+        "width": 1156,
+        "height": 552
+      },
+      "alt_text": "Alex Sotelo holds a red microphone while Live Vision displays a caption from the browser camera."
+    },
+    {
+      "file": "astra-goal-prompt-03m25s.png",
+      "source_seconds": 205,
+      "crop_filter": "crop=650:350:332:223",
+      "bytes": 123358,
+      "sha256": "6cee533647595dc4cdc488252690bee1aa80515ff94fd90df47d754b24b096c6",
+      "dimensions": {
+        "width": 650,
+        "height": 350
+      },
+      "alt_text": "The original goal prompt shown in the demonstration, including historical optimization targets."
+    },
+    {
+      "file": "reachy-caption-02m14s.png",
+      "source_seconds": 134,
+      "crop_filter": "crop=1156:552:86:111",
+      "bytes": 390535,
+      "sha256": "fa5c3f1e0e7ee6de9a244c91aa2cc698f7d73187d2f73b2728f95e95e178630c",
+      "dimensions": {
+        "width": 1156,
+        "height": 552
+      },
+      "alt_text": "Reachy Mini camera view of a Game Boy, Jetson Orin Nano box, and toy, with the resulting caption and Auto-speak enabled."
+    },
+    {
+      "file": "webcam-live-captions-00m38s-00m46s.gif",
+      "source_start_seconds": 38,
+      "source_end_seconds": 46,
+      "duration_seconds": 8,
+      "crop_filter": "crop=1156:552:86:111",
+      "fps": 10,
+      "bytes": 3886036,
+      "sha256": "b180c1507aff487357a325d6f892d6e6f1e1caab65898fa86eaba0165ebc2de2",
+      "dimensions": {
+        "width": 960,
+        "height": 458
+      },
+      "alt_text": "Alex Sotelo shows a football, an NVIDIA cap, and a red microphone to the browser camera while Live Vision captions update."
+    },
+    {
+      "file": "reachy-caption-update-02m07s-02m15s.gif",
+      "source_start_seconds": 127,
+      "source_end_seconds": 135,
+      "duration_seconds": 8,
+      "crop_filter": "crop=1156:552:86:111",
+      "fps": 10,
+      "bytes": 1760142,
+      "sha256": "0a0bcb7d5909dcf7fd83c348415f90e423511bdbc685684afab3575773318275",
+      "dimensions": {
+        "width": 960,
+        "height": 458
+      },
+      "alt_text": "An updated caption appears for the Reachy Mini camera view while Auto-speak is enabled; the GIF has no audio."
+    }
+  ]
+}

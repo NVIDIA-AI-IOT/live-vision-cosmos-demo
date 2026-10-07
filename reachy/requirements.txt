@@ -1,0 +1,38 @@
+# What reachy_mjpeg_bridge.py runs on: the Orin's /opt/live-vision-cosmos-demo/reachy_env (Python
+# 3.12), pinned from the `pip freeze` of the venv verified against the robot, so a rebuilt venv
+# behaves like that one. This is the bridge's whole dependency closure - its WebRTC client is the
+# vendored reachy/reachy_stream, not the Reachy SDK. setup-orin.sh builds it; by hand:
+#
+#   sudo -u "$(stat -c %U /opt/live-vision-cosmos-demo)" /opt/live-vision-cosmos-demo/reachy_env/bin/pip \
+#     install -r /opt/live-vision-cosmos-demo/reachy/requirements.txt
+#
+# aiortc stays at 1.10.1 on purpose. Its receiver keeps the RTX codec after unwrapping a
+# retransmitted packet, queues the frame to the decoder as video/rtx, and the decoder thread dies;
+# 1.14.0 does the same, so upgrading does not fix it. The bridge avoids it by answering H.264
+# without RTX. An aiortc upgrade needs a live session against the robot before it ships.
+aiortc==1.10.1
+aioice==0.10.2
+av==13.1.0
+pyee==14.0.0
+pylibsrtp==1.0.0
+pyOpenSSL==26.4.0
+cryptography==50.0.1
+cffi==2.1.1
+pycparser==3.0
+google-crc32c==1.8.0
+dnspython==2.8.0
+ifaddr==0.2.0
+typing_extensions==4.16.0
+
+aiohttp==3.14.3
+aiohappyeyeballs==2.7.1
+aiosignal==1.4.0
+attrs==26.1.0
+frozenlist==1.8.0
+idna==3.19
+multidict==6.8.0
+propcache==0.5.2
+yarl==1.24.5
+
+# Not imported by the bridge or this repo's tests; kept from the verified venv's freeze.
+numpy==2.5.3

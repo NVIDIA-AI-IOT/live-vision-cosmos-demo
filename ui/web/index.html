@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Cosmos3 Edge · Live vision</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header><div><span class="eyebrow">LOCAL VISION LAB</span><h1>Cosmos3 <span>Edge</span></h1></div><span id="backendStatus" class="badge" role="status">Checking backend…</span></header>
+  <div id="statusBar" class="status-bar">
+    <div class="services-block">
+      <h3 class="services-heading">Services</h3>
+      <ul id="servicesList" class="services-list"><li class="hint">Checking…</li></ul>
+    </div>
+  </div>
+  <main id="workspace" data-caption-position="below">
+    <section id="engineSwitchRow" class="model-panel" aria-labelledby="modelSwitcherTitle">
+      <div class="model-heading"><h2 id="modelSwitcherTitle">Vision model</h2><span id="engineSwitchStatus" role="status">Checking models…</span></div>
+      <div id="modelButtons" class="model-buttons" aria-label="Available vision models"></div>
+      <div id="engineSwitchProgress" class="switch-progress" hidden role="progressbar" aria-label="Model switch progress" aria-valuemin="0" aria-valuemax="100"><div id="engineSwitchProgressFill" class="switch-progress-fill"></div></div>
+      <p id="engineSwitchHint" class="hint">Checking model availability on this device.</p>
+    </section>
+    <details id="reachySetup" class="reachy-setup">
+      <summary><span>Reachy Mini setup <small>Optional</small></span><span id="reachySetupSummary">Checking setup…</span></summary>
+      <div class="reachy-setup-body">
+        <p class="hint">Add a Reachy Mini now or later. Your browser camera and image uploads work without a robot. Discovery looks for Reachy advertisements on the Orin’s local network; it does not connect to a robot automatically.</p>
+        <p id="reachySetupStatus" class="reachy-setup-status" role="status" aria-live="polite">Checking saved configuration…</p>
+        <div class="controls"><button id="reachyDiscoverButton" type="button">Find Reachy Mini</button><button id="reachySetupRefresh" type="button">Refresh status</button></div>
+        <div id="reachyDiscovered" class="reachy-discovered" hidden><p id="reachyDiscoveryLabel">Found robots — select one, then choose Connect.</p><div id="reachyDiscoveryChoices" role="group" aria-labelledby="reachyDiscoveryLabel"></div></div>
+        <form id="reachySetupForm">
+          <label for="reachyAddress">Reachy Mini IP address or hostname</label>
+          <div class="reachy-address-row"><input id="reachyAddress" type="text" placeholder="reachy-mini.local" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="253" aria-describedby="reachySetupFallback"><button id="reachyConnectButton" class="primary" type="submit">Connect</button></div>
+        </form>
+        <p id="reachySetupFallback" class="hint">If discovery is blocked or finds nothing, open the Reachy Mini dashboard or your router’s connected-device list, then enter the robot’s IP address or hostname here. Keep the Orin and robot on the same local network. You can also skip Reachy and return to this panel later.</p>
+        <div class="controls"><button id="reachySkipButton" type="button">Skip Reachy for now</button></div>
+        <p id="reachySetupMedia" class="hint">Configuring a robot prepares its camera bridge but does not display video, play speech or move its motors. Choose Use Reachy Mini for video, Listen for audio, or a Speak button for Piper speech through the robot’s speaker.</p>
+      </div>
+    </details>
+    <fieldset class="caption-toolbar">
+      <legend>Caption position</legend>
+      <div class="caption-options">
+        <label><input type="radio" name="captionPosition" value="side"> Side window</label>
+        <label><input type="radio" name="captionPosition" value="above"> Above camera</label>
+        <label><input type="radio" name="captionPosition" value="below" checked> Below camera</label>
+      </div>
+    </fieldset>
+    <section id="cameraPanel" class="vision panel full-width" aria-label="Camera and image input">
+      <div class="panel-heading"><h2>Live view</h2><span id="sourceStatus">No camera running</span></div>
+      <div class="video-frame">
+        <div id="captionAbove" class="caption-dock" hidden></div>
+        <div class="preview"><video id="video" autoplay playsinline muted hidden></video><img id="uploadedImage" alt="Selected image for analysis" hidden><img id="reachyImage" alt="Reachy Mini camera" hidden><div id="placeholder"><span class="reticle">＋</span><p>Bring the world into view.</p><small>Start your camera, use Reachy Mini, or choose an image.</small></div><span id="liveIndicator" hidden>● LIVE</span></div>
+        <div id="captionBelow" class="caption-dock"><div id="answer" class="answer" aria-live="polite" tabindex="0">Start your camera or choose an image to see captions.</div></div>
+      </div>
+      <div class="controls"><button id="startButton" class="primary">Start camera</button><button id="flipCameraButton" hidden title="Switch between the outward-facing and self-facing camera">⟲ Flip camera</button><button id="reachyButton" aria-describedby="reachyHelp">Use Reachy Mini</button><button id="listenButton" aria-pressed="false" hidden>Listen: Off</button><button id="stopButton" disabled>Stop</button><button id="analyzeButton" disabled>Run inference</button><button id="liveToggleButton" aria-pressed="true" aria-describedby="liveToggleHelp">Live streaming: On</button><button id="autoSpeakButton" aria-pressed="false" aria-describedby="autoSpeakHelp" hidden>Auto-speak: Off</button><label class="file-button" for="imageInput">Choose image<input id="imageInput" type="file" accept="image/jpeg,image/png,image/webp"></label></div>
+      <p id="autoSpeakHelp" class="hint" hidden>Speaks each completed caption aloud through Reachy's speaker as soon as it lands, at the speech rate set below. If Reachy is still speaking the previous one when a new caption completes, that caption is skipped rather than queued, so speech never falls further and further behind.</p>
+      <details id="reachyControls" aria-label="Reachy Mini controls" hidden>
+        <summary><span>Reachy Mini controls</span><span id="reachyControlStatus" class="hint">Checking robot…</span></summary>
+        <div class="controls">
+          <button id="reachyWake">Wake</button>
+          <button id="reachySleep">Sleep</button>
+          <button id="reachyCenter">Centre</button>
+          <button id="reachyFaceSound" title="Turns the base toward the last sound the microphone array heard">Face last sound</button>
+        </div>
+        <div class="controls">
+          <span class="hint control-label">Motors</span>
+          <button id="reachyMotorStiff" title="Motors hold position - required for Centre and the pose controls below to actually move the robot">Stiff</button>
+          <button id="reachyMotorSoft" title="Gravity-compensated - the robot can be posed by hand">Soft</button>
+          <button id="reachyMotorLimp" title="Motors off - Centre and the pose controls will be refused until Stiff is selected again">Limp</button>
+        </div>
+        <div class="controls">
+          <button id="reachySpeakAnswer" title="Sends the current caption (the text under the camera) to Reachy's speaker, via Piper text-to-speech running on the Orin">Speak Cosmos caption</button>
+          <label for="reachySpeakText" class="speech-input-label">Or type your own text for Reachy to say aloud
+            <input id="reachySpeakText" type="text" placeholder="Type text, then press Speak" maxlength="500">
+          </label>
+          <button id="reachySpeakButton" title="Speaks the text typed on the left through Reachy's speaker, via Piper text-to-speech running on the Orin">Speak</button>
+        </div>
+        <div class="controls" role="group" aria-label="Speech rate">
+          <span class="hint control-label">Speech rate</span>
+          <button type="button" class="speedopt" data-rate="0.5">0.5×</button>
+          <button type="button" class="speedopt" data-rate="0.8">0.8×</button>
+          <button type="button" class="speedopt active" data-rate="1">1×</button>
+          <button type="button" class="speedopt" data-rate="1.25">1.25×</button>
+          <button type="button" class="speedopt" data-rate="1.5">1.5×</button>
+          <button type="button" class="speedopt" data-rate="2">2×</button>
+          <button type="button" class="speedopt" data-rate="2.5" title="Fastest available">2.5×</button>
+        </div>
+        <p class="hint" id="reachyPoseStatus" hidden></p>
+        <div class="sec">⌇⌇ Antennas</div>
+        <div class="ctlrow">
+          <div class="ctl">
+            <h4>Left <b id="antLv">0.000 rad</b></h4>
+            <input type="range" id="antL" min="-3.14" max="3.14" step="0.01" value="0.175">
+          </div>
+          <div class="ctl">
+            <h4>Right <b id="antRv">0.000 rad</b></h4>
+            <input type="range" id="antR" min="-3.14" max="3.14" step="0.01" value="0.175">
+          </div>
+        </div>
+        <div class="sec">◉◉ Head</div>
+        <div class="ctlrow">
+          <div class="ctl">
+            <h4>Position X/Y <b id="xyv">0.000 0.000</b></h4>
+            <div class="padwrap">
+              <div class="pad" id="padXY"><i></i></div>
+              <div class="vwrap">
+                <span class="hint axis-label">Z</span>
+                <input type="range" class="vert" id="posZ" min="-0.018" max="0.018" step="0.001" value="0">
+                <b class="hint" id="zv">0.000</b>
+              </div>
+            </div>
+          </div>
+          <div class="ctl">
+            <h4>Pitch / Yaw <b id="pyv">0.000 0.000</b></h4>
+            <div class="padjog">
+              <button type="button" id="jogPitchUp" class="jog jog-u" aria-label="Jog: look up" title="Hold to jog up">▲</button>
+              <div class="padrow">
+                <button type="button" id="jogYawLeft" class="jog jog-l" aria-label="Jog: turn left" title="Hold to jog left">◀</button>
+                <div class="pad" id="padPY"><i></i></div>
+                <button type="button" id="jogYawRight" class="jog jog-r" aria-label="Jog: turn right" title="Hold to jog right">▶</button>
+              </div>
+              <button type="button" id="jogPitchDown" class="jog jog-d" aria-label="Jog: look down" title="Hold to jog down">▼</button>
+            </div>
+            <h4 class="body-yaw-heading">Body yaw <b id="byawv">0.000 rad</b></h4>
+            <input type="range" id="byaw" min="-2.79" max="2.79" step="0.01" value="0" list="byawSnaps" title="Snaps near 0/45/90/135 degrees; turns the head to match, so head and body swing together">
+            <datalist id="byawSnaps">
+              <option value="-2.35619"></option>
+              <option value="-1.5708"></option>
+              <option value="-0.7854"></option>
+              <option value="0"></option>
+              <option value="0.7854"></option>
+              <option value="1.5708"></option>
+              <option value="2.35619"></option>
+            </datalist>
+          </div>
+        </div>
+        <div class="ctlrow roll-control-row">
+          <div class="ctl wide">
+            <h4>Roll <b id="rollv">0.000 rad</b></h4>
+            <input type="range" id="roll" min="-0.7" max="0.7" step="0.01" value="0">
+          </div>
+        </div>
+        <p class="hint">Live control: these set the target the robot's control loop is already chasing, so they track your finger rather than queueing moves. Head travel is ±20&nbsp;mm in X/Y and ±18&nbsp;mm in Z. The arrow buttons around the Pitch/Yaw pad jog a small step at a time - hold to keep moving - for finer control than the pad's own sensitivity. Body yaw turns the head to match, so the two swing together, and snaps near 0/45/90/135°.</p>
+        <div class="controls">
+          <label>App
+            <select id="reachyAppSelect"><option value="">No apps found</option></select>
+          </label>
+          <button id="reachyAppStart">Start app</button>
+          <button id="reachyAppStop">Stop app</button>
+          <label>Speaker <input id="reachySpeakerVol" type="range" min="0" max="100" value="60"></label>
+          <label>Mic <input id="reachyMicVol" type="range" min="0" max="100" value="60"></label>
+        </div>
+        <p class="hint" id="reachyControlHint">Reasoning runs on the Orin (Cosmos3-Edge); speech synthesis also runs on the Orin (Piper) and plays through the robot's own speaker. Available any time the robot is configured, whichever feed is active - these control the robot, not the video source.</p>
+      </details>
+      <audio id="reachyAudio" preload="none" hidden></audio>
+      <p id="liveToggleHelp" class="hint">Turn live streaming off to keep the camera preview and run one inference at a time. Run inference also works with an uploaded image.</p>
+      <p id="cameraHelp" class="hint">Camera stays in your browser. Only sampled frames are sent to the local backend.</p>
+      <p id="reachyHelp" class="hint">Reachy Mini video and microphone come from the robot bridge on the Jetson, not from this device. Listen is off until you turn it on. The video pauses while this tab is hidden; Listen keeps playing.</p>
+      <p class="hint capture-observation"><span id="captureStatus">No frame sent</span><span id="samplingStatus">Capture after each answer</span></p>
+    </section>
+    <div class="output-column full-width">
+      <section id="captionPanel" class="results panel" aria-label="Model output">
+        <div class="panel-heading"><h2>VLM output info</h2><span id="runStatus" role="status">Waiting for input</span></div>
+        <div class="latency-summary" aria-label="Server and browser timing"><div aria-describedby="serverTtftHelp"><span>TTFT</span><strong id="serverTtftValue">—</strong><small>ms</small></div><div><span>Latency</span><strong id="latencyValue">—</strong><small>ms</small></div><div><span>Average</span><strong id="avgLatencyValue">—</strong><small>ms</small></div><div><span>Timed</span><strong id="countValue">0</strong></div><div class="latency-divider" role="separator" aria-hidden="true"></div><div title="Browser request → first text"><span id="firstTextLabel">First visible token</span><strong id="ttft">—</strong></div><div title="Browser request → stream end"><span>Round trip</span><strong id="totalTime">—</strong></div><div title="Since browser capture"><span>Frame age</span><strong id="frameAge">—</strong></div></div>
+        <p class="latency-note"><span id="serverTtftHelp">TTFT: native inference start → first nonempty server text, including server scheduling.</span> Latency and Average cover the full native inference; both exclude JPEG encoding and decoding, network transfer and admission queueing, which the browser-timing figures (right of the divider) include. Values update when an answer completes. Average uses successful timed requests; changing the capture preset, image budget or top-p resets these timings. <span id="timingStatus" role="status">Waiting for a timed answer.</span></p>
+        <div id="captionSide" hidden></div>
+        <p id="error" class="error" role="alert" hidden></p>
+        <div class="detail"><span id="modelName">No model connected</span><span id="requestCount">0 completed</span></div>
+      </section>
+      <section class="resources panel" aria-labelledby="resourcesTitle">
+        <div class="resource-heading"><h2 id="resourcesTitle">Orin resources</h2><span id="telemetryStatus" class="telemetry-status unavailable" role="status">Connecting to device metrics…</span></div>
+        <div class="resource-grid">
+          <div class="resource-stat resource-cpu"><span class="resource-label">CPU</span><strong id="cpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="cpuMeter"></span></div><canvas id="cpuHistory" class="resource-history" role="img" aria-label="CPU usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">CPU usage history. Missing readings appear as gaps.</canvas><small id="cpuHistoryScale" class="resource-history-scale">No samples</small></div>
+          <div class="resource-stat resource-gpu"><span class="resource-label">GPU</span><strong id="gpuUsage" class="resource-value">—</strong><div class="resource-meter" aria-hidden="true"><span id="gpuMeter"></span></div><canvas id="gpuHistory" class="resource-history" role="img" aria-label="GPU usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">GPU usage history. Missing readings appear as gaps.</canvas><small id="gpuHistoryScale" class="resource-history-scale">No samples</small></div>
+          <div class="resource-stat resource-memory"><span class="resource-label">VRAM / shared RAM</span><div id="memoryUsage" class="resource-value memory-value"><strong id="memoryAmount">—</strong> <span id="memoryPercent">Unavailable</span></div><div class="resource-meter" aria-hidden="true"><span id="memoryMeter"></span></div><canvas id="memoryHistory" class="resource-history" role="img" aria-label="System shared RAM usage over the last 60 seconds" aria-describedby="resourceHistoryDescription">System shared RAM history, including the OS and applications. Missing readings appear as gaps.</canvas><small id="memoryHistoryScale" class="resource-history-scale">No samples</small></div>
+        </div>
+        <p class="resource-note"><span id="resourceHistoryDescription">Last 60 seconds. Each chart auto-scales from 0% to its displayed maximum. Gaps mark unavailable readings.</span> Orin CPU and GPU share RAM. Memory includes the OS and applications, not a dedicated GPU allocation.</p>
+      </section>
+    </div>
+    <section class="settings panel" aria-label="Inference settings">
+      <fieldset class="capture-presets"><legend>Capture preset</legend><div class="preset-options"><label><input type="radio" name="capturePreset" id="lightweightPreset" value="lightweight" checked> Lightweight <span>First demo default</span></label><label><input type="radio" name="capturePreset" id="liveVlmPreset" value="live-vlm"> Live VLM WebUI capture</label></div></fieldset>
+      <p id="presetDescription" class="hint preset-description">First demo defaults: requests a 640×480 camera at an ideal 15 FPS (maximum 30). Sends frames with a 512-pixel longest side, JPEG quality 0.8 and a 1-second minimum interval. Captures after each answer. Temperature 0.</p>
+      <p id="modelPolicyStatus" class="model-policy" role="status" hidden></p>
+      <div class="prompt-presets"><label for="promptPreset">Quick presets<select id="promptPreset" aria-describedby="promptPresetHelp"></select></label><p id="promptPresetHelp" class="hint">All ten Live VLM WebUI prompts. Edit any prompt below. Changes apply to the next frame.</p></div>
+      <label for="prompt">Your prompt<textarea id="prompt" maxlength="2000" rows="3">Describe the visible scene in one concise sentence. Focus on objects and actions.</textarea></label>
+      <div class="setting-row"><label for="maxTokens">Output token limit<input id="maxTokens" type="number" value="64" min="1" max="512" aria-describedby="outputTokensHelp"><small id="outputTokensHelp" class="setting-help">Maximum generated answer length. First demo default: 64 output tokens. Live VLM WebUI uses 512.</small></label><label for="interval">Capture interval<select id="interval"><option value="frames30" disabled>Every 30 video frames</option><option value="0">As soon as ready</option><option value="500">0.5 seconds</option><option value="1000" selected>1 second</option><option value="2000">2 seconds</option></select></label><label for="resolution">Frame longest side<select id="resolution"><option value="native" disabled>Full source size</option><option value="384">384 px</option><option value="512" selected>512 px</option><option value="768">768 px</option></select></label></div>
+      <p class="hint">Changing preset stops the current request and clears timings. Your prompt and token limit stay the same. One inference runs at a time and conversation history does not grow. Small or very narrow images are padded for this model.</p>
+      <details class="advanced-settings"><summary>Advanced model settings <span>512 image tokens · top-p 1 at engine load</span></summary>
+        <p class="hint">These model controls are separate from the Live VLM WebUI capture preset and output token limit. Top-p applies to the next request without stopping the camera. Changing either control starts a new timing average. Loading a new engine restores its defaults.</p>
+        <div class="setting-row">
+          <label for="imageTokenPreset">Input image token budget<select id="imageTokenPreset" aria-describedby="imageTokensHelp imageTokenCapacity"><option value="512" selected>512 · First demo default</option><option value="320">320 · Smaller image budget</option><option value="custom">Custom</option></select><small id="imageTokensHelp" class="setting-help">Maximum visual tokens per image, not answer length or camera resolution. Set when the engine is built (512, <code>--maxImageTokensPerImage</code> in setup-orin.sh): the bundled shim does not apply a per-request value, so changing it here does not change the answer. Actual token count depends on the image.</small><small id="imageTokenCapacity" class="setting-help">Supported range: 4–512 image tokens.</small></label>
+          <label id="customImageTokensLabel" for="customImageTokens" hidden>Custom input image tokens<input id="customImageTokens" type="number" value="512" min="4" max="512" step="1" aria-describedby="imageTokenCapacity advancedError"></label>
+          <label for="topP">Sampling top-p<input id="topP" type="number" value="1" min="0" max="1" step="any" aria-describedby="topPHelp advancedError"><small id="topPHelp" class="setting-help">First demo default: 1. Keeps the most likely next-token choices whose combined probability reaches this value. Range: greater than 0, up to 1. Lightweight uses greedy decoding (temperature 0), so top-p has no effect there.</small></label>
+        </div>
+        <p id="advancedError" class="advanced-error" role="alert" hidden></p>
+        <dl class="engine-settings"><div><dt>Fixed device clocks</dt><dd id="staticClocksValue">Checking engine…</dd><small>Pinned at boot by jetson-clocks.service (setup-orin.sh), not a server setting.</small></div><div><dt>Vision encoder cache</dt><dd id="encoderCacheValue">Checking engine…</dd></div></dl>
+        <p id="runtimeStatus" class="hint">Reading active engine settings. Shown only if the backend reports them.</p>
+
+      </details>
+      <details class="comparison-details"><summary>About the comparison</summary><p>Lightweight restores the first demo settings. The Live VLM WebUI capture preset matches its camera request, frame interval, JPEG quality and temperature. Switching capture presets preserves your prompt, output token limit and advanced settings. For its default prompt and answer cap, choose Scene Description and set the output limit to 512. Actual camera resolution and FPS depend on your device. This interface counts browser video frames and streams tokens; upstream counts frames after WebRTC and returns complete answers. Reachy Mini arrives as an image stream, which exposes no frame count, so with that preset it is sampled on a 6-second timer while its bridge is live: the time 30 frames take at the bridge's nominal 5 FPS. Input image tokens and top-p are separate model settings above. Latency and Average use server inference timing only, excluding JPEG encoding and decoding, network transfer and queueing. Compare the same images, prompts and settings across backends; browser timing diagnostics are not used for scoring.</p></details>
+    </section>
+  </main>
+  <footer>TensorRT-Edge-LLM backend · Original lightweight camera and streaming interface · Inspired by <a href="https://github.com/NVIDIA-AI-IOT/live-vlm-webui" target="_blank" rel="noreferrer">NVIDIA Live VLM WebUI</a><br><span>Resource readings and inference latency come from the Jetson. Browser timing diagnostics are shown separately.</span></footer>
+</body>
+</html>

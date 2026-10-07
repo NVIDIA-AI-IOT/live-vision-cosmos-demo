@@ -1,0 +1,12 @@
+{
+  "cosmos": {
+    "kind": "service",
+    "protocol": "cosmos",
+    "name": "Cosmos3-Edge",
+    "model_id": "nvidia/Cosmos3-Edge",
+    "service": "live-vision-cosmos-demo-shim.service",
+    "backend_port": 8001,
+    "path": "/opt/live-vision-cosmos-demo/engine-link",
+    "profile": "Cosmos3-Edge, INT4, smallest RAM footprint"
+  }
+}

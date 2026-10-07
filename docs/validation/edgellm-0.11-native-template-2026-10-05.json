@@ -1,0 +1,35 @@
+{
+  "backend_revision": "95515c2f87fba8982db5a519f9022277667b3cc9",
+  "template_sha256": "7120ee6666468d4e9b2dc11e133ac5c2fa765fa5907706bf0f906270aa5510c8",
+  "nlohmann_revision": "55f93686c01528224f448c19128836e7df245f72",
+  "renderer": "unmodified upstream InjaRenderer+injaCallbacks+injaJson, Apple clang C++17, no CUDA",
+  "cases": [
+    {
+      "case": "text",
+      "passed": true,
+      "output_bytes": 131,
+      "output_sha256": "942fa8a002fd90c5487e4001514acb3067260b8aa966bb06722b0f3e82174d22"
+    },
+    {
+      "case": "image",
+      "passed": true,
+      "output_bytes": 174,
+      "output_sha256": "b19eac9ed3403b0224ca7e2570758ed1ae7bfd4981a88825f44adc161cd73f71"
+    }
+  ],
+  "date": "2026-10-05",
+  "model_revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+  "checks": [
+    "Provider template SHA-256 matches pinned checkpoint",
+    "Text and single-image renders succeed with enable_thinking=false",
+    "Prompt preserved",
+    "Single image produces exactly one image placeholder sequence",
+    "Non-thinking assistant prefix",
+    "No tools block"
+  ],
+  "limitations": [
+    "CPU-only native renderer check",
+    "Full ChatTemplate message conversion, tokenizer, pybind and inference not exercised",
+    "No GPU performance or RAM measurement"
+  ]
+}

@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+[Unit]
+Description=Reachy Mini camera + microphone bridge (WebRTC to HTTP)
+After=network.target
+ConditionPathExists=/opt/live-vision-cosmos-demo/reachy.env
+
+[Service]
+Type=simple
+# REPLACE with the account you cloned this repo as.
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+# See README "4. Set up the Reachy Mini bridge" for the venv this runs from -
+# reachy/requirements.txt installs cleanly from prebuilt aarch64 wheels, no compilation needed.
+# The robot's address is REACHY_MINI_IP in reachy.env, not in this file: setup-orin.sh writes it,
+# and scripts/set-reachy-ip.sh changes it and restarts this service. Installing by hand? Create
+# that file with the one line REACHY_MINI_IP=<your robot's IP or hostname>.
+EnvironmentFile=-/opt/live-vision-cosmos-demo/reachy.env
+# Empty/unset means explicitly skipped or not configured, not a crashing service.
+ExecCondition=/usr/bin/test -n ${REACHY_MINI_IP}
+ExecStart=/opt/live-vision-cosmos-demo/reachy_env/bin/python3 \
+  /opt/live-vision-cosmos-demo/reachy/reachy_mjpeg_bridge.py \
+  --robot-host ${REACHY_MINI_IP} --listen 127.0.0.1 --listen-port 8099 --fps 5
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,55 @@
+{
+  "validation_date": "2026-09-29",
+  "host": {
+    "architecture": "arm64",
+    "macos_version": "26.7",
+    "memory_gib": 36,
+    "reader": "Built-in SDXC"
+  },
+  "flasher_revision": "pre-release (repository history was squashed before publication)",
+  "invocation": "./scripts/flash-jetpack-sd-mac.sh --disk /dev/diskN --erase --image-dir <validated-image-directory>",
+  "flash_receipt": {
+    "status": "flashed_verified_and_ejected",
+    "started_at": "2026-09-29T19:16:24.504751+00:00",
+    "completed_at": "2026-09-29T19:21:54.807472+00:00",
+    "jetpack_version": "7.2.1",
+    "board": "jetson-orin-nano-devkit-super",
+    "card_capacity_bytes": 62883102720,
+    "bytes_verified": 10181672960,
+    "readback_sha256": "74a0b5e4b1d5c5e059b3f69f87678c14575f7eb0e530c90b7ee28f602a2e6aef",
+    "cosmos3_edge_installed": false,
+    "live_vision_ui_installed": false,
+    "full_jetpack_compute_sdk_installed": false,
+    "boot_tested": false,
+    "ejected": true
+  },
+  "image_validation": {
+    "rootfs_validation_passed": true,
+    "gpt_verification_passed": true,
+    "ext4_verification_passed": true,
+    "excluded_application_matches": [],
+    "precreated_users": [],
+    "authorized_ssh_keys": [],
+    "first_boot_target": "nv-oobe.target"
+  },
+  "builder_smoke_test": {
+    "vm_boot": true,
+    "pinned_ssh_host_key": true,
+    "cloud_init": true,
+    "readonly_helper_share": true,
+    "clean_shutdown": true,
+    "full_fresh_image_build": false
+  },
+  "script_sha256": {
+    "scripts/flash-jetpack-sd-mac.sh": "963c7d44951246b06c887264fa2524998522338abe1c768caa45dbf7d3a7d4cf",
+    "scripts/jetpack/mac.py": "4d146d52a6aaff59c62d59e5feae5cf9946e36be691f284ac35e1462fe0e6261",
+    "scripts/jetpack/write_sd.py": "1a5fe67db70a1430b687411f9f197dd6bf2affbbabc93739b460326149d1b913",
+    "scripts/jetpack/release.json": "6b2fa11dfd152cce453321326fb575d9f97e5992ea9ff7b841630506f9be3e15"
+  },
+  "skill_sha256": "20c99f04b031705ec9e76852e00419ea5d15e65f6f772d994cfec9f6603f163d",
+  "limits": [
+    "Fresh BSP/rootfs image creation and validation passed using the earlier scripts this one-shot was adapted from. The one-shot used that cached image.",
+    "The new wrapper's fresh VM bootstrap passed; a complete cold image build through it has not been run.",
+    "SD boot, first-boot filesystem expansion, compute installation and Live Vision execution on this card have not been tested."
+  ]
+}

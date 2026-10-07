@@ -1,0 +1,35 @@
+__pycache__/
+*.pyc
+node_modules/
+.jetpack-cache/
+# scripts/bootstrap.sh --host-quantize scratch (cleaned up on exit; ignored as a backstop
+# in case cleanup doesn't run, e.g. the process is killed)
+/tmp.*/
+/results/
+.env
+.env.*
+*.pem
+*.key
+*.engine
+*.onnx
+*.onnx.data
+*.safetensors
+*.gguf
+*.part
+*.tar
+*.tar.gz
+*.tar.zst
+.venv/
+reachy_env/
+external/
+checkpoints/
+engines/
+tls/
+data/
+.setup-state/
+
+# Per-device config written on the Orin (scripts/set-reachy-ip.sh), never committed.
+/reachy.env
+/reachy-setup.json
+/reachy-setup.lock
+/.reachy-*
