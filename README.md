@@ -95,7 +95,7 @@ With the source installation, open **Reachy Mini setup** to discover or enter a 
 
 ![A caption updates while the selected camera is Reachy Mini](docs/media/reachy-caption-update-02m07s-02m15s.gif)
 
-[still image](docs/media/reachy-caption-02m14s.png)
+![Reachy Mini camera view of a Game Boy, Jetson Orin Nano box and toy, with the generated caption](docs/media/reachy-caption-02m14s.png)
 
 The source installation prepares the Text-to-Speech (using Piper TTS) and the camera bridge. After connecting your robot, try **Auto-speak** to hear captions. The current fixed-engine container does **not** include robot camera bridging or Piper speech; use the source path for those features. No Home Assistant installation is required.
 
