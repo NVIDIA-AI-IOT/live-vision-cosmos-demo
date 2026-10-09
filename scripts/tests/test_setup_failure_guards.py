@@ -25,7 +25,7 @@ ARTIFACTS = (
 )
 ENGINE_READY_STAGES = (
     "system_packages", "pin_clocks", "fetch_repo_self", "jetpack_compute", "fetch_edgellm",
-    "edgellm_venv", "build_edgellm_runtime", "download_checkpoint", "fix_raw_config",
+    "edgellm_venv", "build_edgellm_runtime", "sdk_python_dependencies", "download_checkpoint", "fix_raw_config",
     "quantize", "export_onnx_llm", "export_onnx_visual", "validate_chat_template",
 )
 
@@ -67,6 +67,8 @@ def load(path, *, load_external_data):
 
 
 def revision(stage):
+    if stage == "sdk_python_dependencies":
+        return SDK + ":native-shim-v1"
     return VISUAL_REVISION if stage in ("export_onnx_visual", "build_visual_layout") else SDK
 
 # These stand in for all privileged/Linux-specific operations. Sparse fixture files
@@ -149,6 +151,7 @@ class SetupFailureGuards(unittest.TestCase):
     def populate_completed_install(self):
         for stage in HEAVY_STAGES:
             (self.fixture / "state" / stage).write_text(revision(stage) + "\n")
+        (self.fixture / "state/sdk_python_dependencies").write_text(revision("sdk_python_dependencies") + "\n")
         for relative in ARTIFACTS:
             path = self.fixture / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -202,6 +205,18 @@ class SetupFailureGuards(unittest.TestCase):
         self.assertEqual((result.returncode, result.stdout.strip()), (0, "8"), result.stderr)
         # No quantized checkpoint exists: valid for a completed host-export installation.
         self.assertFalse((self.fixture / "checkpoints").exists())
+
+    def test_completed_install_dependency_migration_reserves_pip_space(self):
+        self.populate_completed_install()
+        (self.fixture / "state/sdk_python_dependencies").unlink()
+        result = self.run_shell("minimum_free_space_gib; stage_done build_engine")
+        self.assertEqual((result.returncode, result.stdout.strip()), (0, "12"), result.stderr)
+
+    def test_unfinished_engine_requires_completed_python_dependencies_for_lower_allowance(self):
+        self.populate_engine_ready()
+        (self.fixture / "state/sdk_python_dependencies").unlink()
+        result = self.run_shell("minimum_free_space_gib")
+        self.assertEqual((result.returncode, result.stdout.strip()), (0, "25"), result.stderr)
 
     def test_verified_exports_allow_engine_only_resume_with_12_gib(self):
         self.populate_engine_ready()

@@ -1,10 +1,14 @@
-# What reachy_mjpeg_bridge.py runs on: the Orin's /opt/live-vision-cosmos-demo/reachy_env (Python
+# What reachy_mjpeg_bridge.py runs on: the Orin's verified reachy-media/current/venv (Python
 # 3.12), pinned from the `pip freeze` of the venv verified against the robot, so a rebuilt venv
 # behaves like that one. This is the bridge's whole dependency closure - its WebRTC client is the
 # vendored reachy/reachy_stream, not the Reachy SDK. setup-orin.sh builds it; by hand:
 #
-#   sudo -u "$(stat -c %U /opt/live-vision-cosmos-demo)" /opt/live-vision-cosmos-demo/reachy_env/bin/pip \
-#     install -r /opt/live-vision-cosmos-demo/reachy/requirements.txt
+#   python3 scripts/build-reachy-media.py --install-root /opt/live-vision-cosmos-demo
+#
+# PyAV must be built against the private LGPL FFmpeg prefix. Prebuilt PyAV wheels
+# can bundle GPL codecs. The helper installs our source-built wheel first and verifies
+# the actual loaded libraries after installing this closure; no wheel fallback is accepted.
+--no-binary=av
 #
 # aiortc stays at 1.10.1 on purpose. Its receiver keeps the RTX codec after unwrapping a
 # retransmitted packet, queues the frame to the decoder as video/rtx, and the decoder thread dies;

@@ -16,7 +16,7 @@ class SourceArchiveTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.app = self.root / 'public/code-samples/demo'
+        self.app = self.root / 'projects/demo'
         (self.app / 'scripts').mkdir(parents=True)
         shutil.copyfile(SCRIPT, self.app / 'scripts/archive-source.sh')
         (self.app / 'README.md').write_text('fixture source')
@@ -27,15 +27,15 @@ class SourceArchiveTests(unittest.TestCase):
             return {m.name.removeprefix('./') for m in archive}
 
     def test_git_subtree_does_not_ship_parent_repository(self):
-        (self.root / 'unrelated-website.txt').write_text('must stay outside the archive')
+        (self.root / 'unrelated-project.txt').write_text('must stay outside the archive')
         for args in (['init', '-q'], ['add', '.'], ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
                                                 'commit', '-qm', 'fixture']):
             subprocess.run(['git', '-C', str(self.root), *args], check=True)
         members = self.members()
         self.assertIn('README.md', members)
         self.assertIn('scripts/archive-source.sh', members)
-        self.assertNotIn('unrelated-website.txt', members)
-        self.assertFalse(any(m.startswith('public/') for m in members))
+        self.assertNotIn('unrelated-project.txt', members)
+        self.assertFalse(any(m.startswith('projects/') for m in members))
 
     def test_plain_download_excludes_credentials_and_engines(self):
         (self.app / '.env.local').write_text('synthetic configuration')
@@ -44,9 +44,13 @@ class SourceArchiveTests(unittest.TestCase):
             (self.app / name).write_text('synthetic device settings')
         (self.app / 'engines').mkdir()
         (self.app / 'engines/llm.engine').write_text('synthetic engine')
+        for name in ('piper', 'piper-builds', 'piper-download-cache'):
+            (self.app / name).mkdir()
+            (self.app / name / 'private-payload').write_text('not source content')
         members = self.members()
         self.assertIn('README.md', members)
         self.assertFalse(any('.env' in m or 'engines' in m or 'reachy-setup' in m or '.reachy-' in m for m in members))
+        self.assertFalse(any(m.split('/')[0] in ('piper', 'piper-builds', 'piper-download-cache') for m in members))
 
 
 if __name__ == '__main__':

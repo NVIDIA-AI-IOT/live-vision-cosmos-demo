@@ -25,8 +25,8 @@ class SetupRoutes(unittest.TestCase):
         self.setup.snapshot.side_effect = lambda: dict(self.state)
         self.setup.discover.return_value = {'devices': [], 'status': 'empty', 'message': 'Enter an address or skip.'}
         self.client_factory = mock.Mock()
-        self.piper_factory = mock.Mock()
-        self.runtime = ui.ReachyRuntime(self.setup, self.piper_factory, self.client_factory)
+        self.speech_factory = mock.Mock()
+        self.runtime = ui.ReachyRuntime(self.setup, self.speech_factory, self.client_factory)
         self.runtime.refresh()
         self.server.reachy_setup = self.setup
         self.server.reachy_runtime = self.runtime
@@ -88,7 +88,7 @@ class SetupRoutes(unittest.TestCase):
         self.client_factory.assert_called_once_with('http://192.168.10.20:8000')
         self.assertIs(self.server.reachy_client, self.client_factory.return_value)
         self.server.engine_switcher.switch.assert_not_called()
-        self.assertFalse(self.piper_factory.return_value.synth.called)
+        self.assertFalse(self.speech_factory.return_value.synth.called)
 
     def test_configuration_failure_leaves_runtime_unchanged(self):
         self.setup.configure.side_effect = RuntimeError('Bridge failed; restored previous configuration.')
@@ -105,31 +105,31 @@ class SetupRoutes(unittest.TestCase):
             self.state.update(configured=True, address='192.168.10.20')
             self.runtime.refresh()
             self.assertIs(other.reachy_client, self.server.reachy_client)
-            piper, client = self.server.piper, self.server.reachy_client
+            speech, client = self.server.speech, self.server.reachy_client
             self.runtime.refresh()
             self.client_factory.assert_called_once()
             self.state.update(configured=False, address='', skipped=True)
             self.runtime.refresh()
             self.assertIsNone(other.reachy_client)
-            self.assertIsNone(self.server.piper)
-            piper.close.assert_called_once()
+            self.assertIsNone(self.server.speech)
+            speech.close.assert_called_once()
             client.session.close.assert_called_once()
         finally:
             other.server_close()
 
     def test_installed_optional_services_stay_visible_while_skipped(self):
-        piper = mock.Mock(proc=None, model=Path('/tmp/synthetic-voice.onnx'))
-        self.server.piper = piper
+        speech = mock.Mock(proc=None, binary=Path('/tmp/flite/bin/flite'))
+        self.server.speech = speech
         self.server.engine_switcher = None
         self.server.services_config = {'Reachy Mini bridge': {'cmdline_match': 'reachy_mjpeg_bridge.py'}}
         with mock.patch.object(ui, 'find_pid_by_cmdline', return_value=None), \
              mock.patch.object(ui, 'dir_size_mb', return_value=0), \
              mock.patch.object(ui, 'disk_for_path', return_value='test'):
             rows = {row['name']: row for row in self.server.service_list()}
-        self.assertFalse(rows['TTS (Piper)']['running'])
-        self.assertEqual(rows['TTS (Piper)']['state_detail'], 'Idle · connect Reachy Mini')
+        self.assertFalse(rows['TTS (Flite)']['running'])
+        self.assertEqual(rows['TTS (Flite)']['state_detail'], 'Idle · connect Reachy Mini')
         self.assertEqual(rows['Reachy Mini bridge']['state_detail'], 'Not configured')
-        piper.synth.assert_not_called()
+        speech.synth.assert_not_called()
 
     def test_cli_transaction_is_not_applied_before_it_finishes(self):
         self.state.update(configured=True, address='192.168.10.20', busy=True)

@@ -45,7 +45,7 @@ def check_host(spec):
     if not release.startswith(target["l4t"] + "-"):
         raise ValueError("Host JetPack/L4T does not match this engine bundle")
     if "Orin Nano" not in Path("/proc/device-tree/model").read_text():
-        raise ValueError("This candidate supports only the Orin Nano Super 8GB")
+        raise ValueError("This runtime supports only the Orin Nano Super 8GB")
 
 
 def main():

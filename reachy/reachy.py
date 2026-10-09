@@ -65,7 +65,7 @@ class Reachy:
         # A bare requests.get/post opens a fresh TCP connection every call - every state poll,
         # every motor command, every speak. Over WiFi to the robot that variance shows up as
         # occasional multi-second calls for no reason tied to what was actually asked ("still
-        # sluggish" even once Piper itself is fast and warm). A Session keeps the connection to
+        # sluggish" even when local speech synthesis is fast). A Session keeps the connection to
         # this one host alive between calls (HTTP keep-alive, via urllib3's pooling) instead of
         # paying a fresh TCP/TLS-equivalent handshake on every single request.
         self.session = requests.Session()

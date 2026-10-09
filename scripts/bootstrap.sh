@@ -27,7 +27,7 @@
 # sudo - you'll be asked for its password twice (copying the repo, then setup itself); an
 # unattended run needs passwordless sudo instead. Everything else - cloning
 # TensorRT-Edge-LLM, downloading and quantizing the checkpoint, building the engine,
-# installing Piper/systemd - happens on the Orin itself, unless --host-quantize moved the
+# installing Flite/systemd - happens on the Orin itself, unless --host-quantize moved the
 # quantize+export step here.
 set -euo pipefail
 

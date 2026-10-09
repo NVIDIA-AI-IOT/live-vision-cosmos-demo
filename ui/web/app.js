@@ -248,7 +248,7 @@ class ReachySetupController {
         if (this.usable && !this.busy && expected) {
           this.failed = false; this.devices = [];
           this.message = action === "configure"
-            ? "Robot address saved. Choose Use Reachy Mini to check its camera. Piper stays idle until you ask it to speak."
+            ? "Robot address saved. Choose Use Reachy Mini to check its camera. Flite stays idle until you ask it to speak."
             : "Reachy skipped. Keep using your camera or images; return here whenever you want to add a robot.";
         } else {
           this.failed = true;
@@ -1831,13 +1831,8 @@ if (typeof document !== "undefined") {
   $("reachyAppStop").addEventListener("click", () => reachyPost("/api/reachy/apps/stop"));
   $("reachySpeakerVol").addEventListener("change", e => reachyPost(`/api/reachy/volume/speaker/${e.target.value}`));
   $("reachyMicVol").addEventListener("change", e => reachyPost(`/api/reachy/volume/mic/${e.target.value}`));
-  // Piper.synth() (serve_ui.py) holds one lock for the whole synth+play call, so a second speak
-  // request fired before the first finishes does not run alongside it - it queues behind it. A
-  // click while one is already in flight used to do exactly that, and with live captioning
-  // updating every second or two, a queued click could end up speaking a caption from several
-  // answers ago by the time its turn came - "lag" that compounded the more it was clicked.
-  // Disabling both buttons for the duration of a request keeps at most one in flight at a time,
-  // so a request always speaks the caption it was asked to, promptly, or not at all.
+  // Keep one speech request in flight per tab, including synthesis and robot playback.
+  // Disabling both buttons prevents old captions from accumulating behind a slow request.
   let speaking = false, speechRate = 1;
   // speaking also gates auto-speak (below): a caption that completes while Reachy is still
   // speaking the previous one is skipped rather than queued, the same reasoning as the button

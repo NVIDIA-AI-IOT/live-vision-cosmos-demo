@@ -31,8 +31,9 @@ import ssl
 import subprocess
 import sys
 import threading
+import tempfile
 import time
-import uuid
+import wave
 from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -304,7 +305,7 @@ def validate_request(payload):
 
 # --------------------------------------------------------------------------- service inventory
 # The "which services are up, how much RAM and disk do they use, SD card or NVMe" panel. Every
-# service here besides this UI process itself and the Piper subprocess (which this process starts
+# service here besides this UI process itself and the Flite subprocess (which this process starts
 # and already holds a handle to) is a *separate* process this UI does not manage - found by
 # scanning /proc for a matching command line, the only channel available without adding an agent
 # or a dependency on each service exposing its own metrics endpoint.
@@ -587,128 +588,81 @@ class EngineSwitcher:
 SPEECH_RATES = (0.5, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5)
 
 
-class Piper:
-    """Local TTS via a persistent Piper process, one JSON line per utterance on stdin.
+class Flite:
+    """Local speech using the built-in SLT voice, with one bounded process per request."""
 
-    A fresh process per utterance would pay Piper's ~1-3 s cold model load every time, which alone
-    misses any reasonable speak-after-caption latency target. Keeping one process warm (--json-input
-    mode) means only the first call after startup pays that cost.
-    """
-
-    def __init__(self, binary: Path, model: Path, out_dir: Path):
-        self.binary = binary
-        self.model = model
-        self.out_dir = out_dir
+    def __init__(self, binary: Path, out_dir: Path):
+        self.binary = binary.resolve()
+        self.out_dir = out_dir.resolve()
         self.proc = None
         self.lock = threading.Lock()
 
-    def _start(self, reason: str = "startup"):
-        # Piper's own stderr used to go to DEVNULL, so a process that died left no trace at all -
-        # the next speak request would silently pay a full cold restart (this is what "Reachy
-        # went quiet for a while, then was fine" reports usually are) with nothing in the journal
-        # explaining why the previous process was gone. Now captured to a small ring buffer and
-        # printed on exit, and the restart itself is logged with the dead process's exit code -
-        # negative means killed by a signal (-9 is almost always the OOM killer on this board).
-        self.out_dir.mkdir(parents=True, exist_ok=True)
-        env = dict(os.environ, LD_LIBRARY_PATH=str(self.binary.parent))
-        print(f"[piper] starting ({reason})", flush=True)
-        self.proc = subprocess.Popen(
-            [str(self.binary), "-m", str(self.model), "--json-input", "--length_scale", "0.85", "-q"],
-            cwd=str(self.out_dir), stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE, env=env, text=True)
-        threading.Thread(target=self._drain_stderr, args=(self.proc,), daemon=True).start()
-
-    def _drain_stderr(self, proc):
-        tail = []
-        try:
-            for line in proc.stderr:
-                tail.append(line.rstrip("\n"))
-                tail[:] = tail[-20:]
-        except (OSError, ValueError):
-            pass
-        code = proc.poll()
-        if code in (None, 0):
-            return
-        detail = ("; last output:\n  " + "\n  ".join(tail)) if tail else "; no output"
-        print(f"[piper] process exited (code={code}){detail}", flush=True)
-
     def close(self):
-        """Release the optional voice worker when the robot is disconnected."""
+        # Synthesis is bounded and reaps its child before releasing this lock.
+        # Robot changes wait for the current request before closing its client.
         with self.lock:
-            proc, self.proc = self.proc, None
-            if proc is None:
-                return
-            if proc.poll() is None:
-                try:
-                    proc.terminate()
-                except ProcessLookupError:
-                    pass
-                try:
-                    proc.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait(timeout=2)
-            for stream in (proc.stdin, proc.stderr):
-                if stream:
-                    stream.close()
+            self.proc = None
 
-    def synth(self, text: str, timeout: float = 8.0) -> Path | None:
-        """Synthesize text to a WAV file. Thread-safe (holds self.lock for the whole call)."""
-        with self.lock:
-            if self.proc is None:
-                self._start()
-            elif self.proc.poll() is not None:
-                self._start(reason=f"previous process exited with code {self.proc.poll()}")
-            name = f"{uuid.uuid4().hex}.wav"
-            out = self.out_dir / name
-            line = json.dumps({"text": text, "output_file": name}) + "\n"
-            try:
-                self.proc.stdin.write(line)
-                self.proc.stdin.flush()
-            except (BrokenPipeError, OSError) as exc:
-                self._start(reason=f"broken pipe on write ({exc})")
-                try:
-                    self.proc.stdin.write(line)
-                    self.proc.stdin.flush()
-                except (BrokenPipeError, OSError):
-                    return None
-            # Two consecutive equal, non-empty size readings is "done writing" - avoids reading a
-            # half-written file without an fsync/rename dance for something that lives seconds.
-            deadline = time.monotonic() + timeout
-            last_size, stable = -1, 0
-            while time.monotonic() < deadline:
-                if out.exists():
-                    size = out.stat().st_size
-                    if size > 44 and size == last_size:
-                        stable += 1
-                        if stable >= 2:
-                            return out
-                    else:
-                        stable = 0
-                    last_size = size
-                time.sleep(0.015)
-            return None
-
-    def retime(self, wav: Path, rate: float) -> Path:
-        """Speed up or slow down an already-synthesized WAV with sox's tempo effect (time-stretch,
-        pitch-preserving - unlike a naive resample, which would also shift pitch). Piper's own
-        --length_scale only takes effect at process start (confirmed: a --json-input line's own
-        length_scale field is silently ignored by this build), so honouring a per-request rate
-        without restarting the warm process - and paying its cold-load cost, the whole reason it
-        stays warm - means adjusting the output afterward instead. Falls back to the untouched
-        file on any sox failure; a wrong rate is a much smaller problem than no speech at all."""
-        if rate == 1.0:
-            return wav
-        out = wav.with_name(f"{wav.stem}-x{rate}.wav")
+    @staticmethod
+    def valid_wav(path: Path) -> bool:
+        """Require complete, nonempty mono PCM from the selected built-in SLT voice."""
         try:
-            result = subprocess.run(["sox", str(wav), str(out), "tempo", str(rate)],
-                                    capture_output=True, timeout=10)
-            if result.returncode == 0 and out.is_file():
-                wav.unlink(missing_ok=True)
-                return out
-        except (OSError, subprocess.SubprocessError):
-            pass
-        return wav
+            if path.stat().st_size > 16 * 1024 * 1024:
+                return False
+            with wave.open(str(path), "rb") as audio:
+                if (audio.getnchannels(), audio.getsampwidth(), audio.getframerate(),
+                        audio.getcomptype()) != (1, 2, 16000, "NONE"):
+                    return False
+                frames = audio.getnframes()
+                return frames > 0 and len(audio.readframes(frames)) == frames * 2
+        except (OSError, EOFError, wave.Error):
+            return False
+
+    def synth(self, text: str, rate: float = 1.0, timeout: float = 8.0) -> Path | None:
+        """Return an isolated WAV only after Flite exits successfully; never queue speech."""
+        if (not text.strip() or type(rate) not in (int, float) or
+                rate not in SPEECH_RATES or not math.isfinite(timeout) or timeout <= 0):
+            return None
+        if not self.lock.acquire(blocking=False):
+            return None
+        out = None
+        complete = False
+        try:
+            self.out_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            fd, filename = tempfile.mkstemp(prefix="flite-", suffix=".wav", dir=self.out_dir)
+            os.close(fd)
+            out = Path(filename)
+            self.proc = subprocess.Popen(
+                [str(self.binary), "--setf", f"duration_stretch={1.0 / rate:.8g}",
+                 "-voice", "slt", "-t", text, "-o", str(out)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                cwd=str(self.out_dir))
+            try:
+                _, stderr = self.proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.communicate()
+                print("[flite] speech synthesis timed out", flush=True)
+                return None
+            if self.proc.returncode != 0:
+                detail = stderr[-2000:].decode("utf-8", errors="replace").strip()
+                print(f"[flite] synthesis exited with code {self.proc.returncode}: {detail}", flush=True)
+                return None
+            complete = self.valid_wav(out)
+            return out if complete else None
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(f"[flite] synthesis failed: {exc}", flush=True)
+            return None
+        finally:
+            if self.proc is not None and self.proc.poll() is None:
+                self.proc.kill()
+                self.proc.communicate()
+            self.proc = None
+            try:
+                if out is not None and not complete:
+                    out.unlink(missing_ok=True)
+            finally:
+                self.lock.release()
 
     @staticmethod
     def spoken_summary(text: str, max_chars: int = 500) -> str:
@@ -730,14 +684,14 @@ class Piper:
 class ReachyRuntime:
     """Shared HTTP/HTTPS robot selection; changing it never touches inference."""
 
-    def __init__(self, setup, piper_factory=None, client_factory=None):
+    def __init__(self, setup, speech_factory=None, client_factory=None):
         self.setup = setup
         self.lock = threading.RLock()
         self.address = None
         self.client = None
-        self.piper = None
+        self.speech = None
         self.client_factory = client_factory or Reachy
-        self.piper_factory = piper_factory
+        self.speech_factory = speech_factory
 
     def apply(self, address):
         with self.lock:
@@ -746,11 +700,11 @@ class ReachyRuntime:
             if address and self.client_factory is None:
                 raise RuntimeError("Reachy control needs python3-requests. Run setup-orin.sh --reachy-only.")
             client = self.client_factory(f"http://{address}:8000") if address else None
-            piper = self.piper_factory() if address and self.piper_factory else None
-            old_client, old_piper = self.client, self.piper
-            self.client, self.piper, self.address = client, piper, address
-            if old_piper:
-                old_piper.close()
+            speech = self.speech_factory() if address and self.speech_factory else None
+            old_client, old_speech = self.client, self.speech
+            self.client, self.speech, self.address = client, speech, address
+            if old_speech:
+                old_speech.close()
             if old_client and getattr(old_client, "session", None):
                 old_client.session.close()
 
@@ -792,12 +746,12 @@ class Server(ThreadingHTTPServer):
         self._reachy_client = value
 
     @property
-    def piper(self):
-        return self.reachy_runtime.piper if self.reachy_runtime else getattr(self, "_piper", None)
+    def speech(self):
+        return self.reachy_runtime.speech if self.reachy_runtime else getattr(self, "_speech", None)
 
-    @piper.setter
-    def piper(self, value):
-        self._piper = value
+    @speech.setter
+    def speech(self, value):
+        self._speech = value
 
     def server_close(self):
         if getattr(self, "owns_telemetry", False):
@@ -805,7 +759,7 @@ class Server(ThreadingHTTPServer):
         super().server_close()
 
     def service_list(self):
-        """Live Vision itself and the Piper subprocess are known directly (this process started
+        """Live Vision itself and each Flite subprocess are known directly (this process starts
         them); everything else in --services-config is a separate process, found by scanning
         /proc for a matching command line - see find_pid_by_cmdline. A registry of separate model
         services (ServiceEngineSwitcher) is reported from that registry directly rather than
@@ -821,15 +775,16 @@ class Server(ThreadingHTTPServer):
                "storage_mb": dir_size_mb(Path(__file__).resolve().parent),
                "disk": disk_for_path(Path(__file__).resolve())}]
         # Keep installed, lazy-start speech visible even when no robot is selected.
-        piper = self.piper or getattr(self, "_piper", None)
-        if piper:
-            pid = piper.proc.pid if piper.proc and piper.proc.poll() is None else None
-            out.append({"name": "TTS (Piper)", "running": pid is not None,
+        speech = self.speech or getattr(self, "_speech", None)
+        if speech:
+            proc = speech.proc
+            pid = proc.pid if proc and proc.poll() is None else None
+            out.append({"name": "TTS (Flite)", "running": pid is not None,
                        "optional": True,
                        "state_detail": "" if pid else ("Idle · starts on speech" if self.reachy_client else "Idle · connect Reachy Mini"),
                        "memory_mb": read_proc_rss_mb(pid) if pid else None,
-                       "storage_mb": dir_size_mb(piper.model.parent),
-                       "disk": disk_for_path(piper.model)})
+                       "storage_mb": dir_size_mb(speech.binary.parent.parent),
+                       "disk": disk_for_path(speech.binary)})
         for name, spec in self.services_config.items():
             pid = find_pid_by_cmdline(spec["cmdline_match"])
             bridge = "reachy_mjpeg_bridge.py" in spec["cmdline_match"]
@@ -1438,7 +1393,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         st = client.state()
         st["enabled"] = True
-        st["speech_enabled"] = self.server.piper is not None
+        st["speech_enabled"] = self.server.speech is not None
         body = json.dumps(st).encode()
         self.send_headers(200, "application/json", len(body))
         self.wfile.write(body)
@@ -1523,9 +1478,9 @@ class Handler(BaseHTTPRequestHandler):
             self.json_error(400, str(exc))
 
     def reachy_speak(self):
-        piper = self.server.piper
-        if not piper:
-            self.json_error(503, "speech not configured (--piper-bin / --piper-model)")
+        speech = self.server.speech
+        if not speech:
+            self.json_error(503, "speech not configured (--flite-bin)")
             return
         try:
             body = self.read_json_body()
@@ -1537,7 +1492,7 @@ class Handler(BaseHTTPRequestHandler):
             self.json_error(400, "expected a non-empty 'text'")
             return
         rate = body.get("rate", 1.0)
-        if type(rate) not in (int, float) or round(float(rate), 2) not in SPEECH_RATES:
+        if type(rate) not in (int, float) or rate not in SPEECH_RATES:
             self.json_error(400, f"rate must be one of {', '.join(str(r) for r in SPEECH_RATES)}")
             return
         rate = float(rate)
@@ -1545,18 +1500,17 @@ class Handler(BaseHTTPRequestHandler):
             self.json_error(503, "reachy daemon not configured (--reachy-daemon-url)")
             return
         t0 = time.monotonic()
-        wav = piper.synth(Piper.spoken_summary(text))
+        wav = speech.synth(Flite.spoken_summary(text), rate=rate)
         if not wav:
-            self.json_error(502, "speech synthesis failed or timed out")
+            self.json_error(502, "speech synthesis failed, busy, or timed out")
             return
-        wav = piper.retime(wav, rate)
         t1 = time.monotonic()
         try:
             ok, remote = self.server.reachy_client.upload_sound(wav.read_bytes(), wav.name)
             if not ok:
-                self.reachy_result(False, f"upload failed: {remote}")
-                return
-            ok, msg = self.server.reachy_client.play_sound(remote)
+                msg = f"upload failed: {remote}"
+            else:
+                ok, msg = self.server.reachy_client.play_sound(remote)
         finally:
             try:
                 wav.unlink()
@@ -1607,11 +1561,9 @@ def main():
                              "through --reachy-url either way.")
     parser.add_argument("--reachy-config", type=Path, default=None,
                         help="Device-local reachy.env managed by optional Reachy setup in the UI.")
-    parser.add_argument("--piper-bin", type=Path, default=None,
-                        help="Path to a Piper TTS binary. Empty disables /api/reachy/speak.")
-    parser.add_argument("--piper-model", type=Path, default=None,
-                        help="Path to a Piper .onnx voice model. Required with --piper-bin.")
-    parser.add_argument("--piper-out-dir", type=Path, default=Path("/tmp/reachy_tts"),
+    parser.add_argument("--flite-bin", type=Path, default=None,
+                        help="Path to the Flite binary with built-in SLT voice. Empty disables /api/reachy/speak.")
+    parser.add_argument("--speech-out-dir", type=Path, default=Path("/tmp/reachy_tts"),
                         help="Scratch directory for synthesized WAV files.")
     parser.add_argument("--engine-link", type=Path, default=None,
                         help='Symlink the shim reads its engine directory from. Only for a '
@@ -1630,7 +1582,7 @@ def main():
                         help='JSON file: {"Display Name": {"cmdline_match": "substring to find '
                              'in /proc/*/cmdline", "path": "/dir/to/report/size/and/disk/for"}, '
                              '...} - for /api/services, services this process does not itself '
-                             "manage (Live Vision itself and Piper are always included).")
+                             "manage (Live Vision itself and Flite are always included).")
     args = parser.parse_args()
     try:
         allowed_hosts = frozenset(allowed_host_name(name) for name in args.allowed_host)
@@ -1649,10 +1601,8 @@ def main():
     if args.reachy_daemon_url and Reachy is None:
         parser.error("--reachy-daemon-url needs the `requests` package "
                      "(sudo apt install python3-requests).")
-    if bool(args.piper_bin) != bool(args.piper_model):
-        parser.error("Provide both --piper-bin and --piper-model.")
-    if args.piper_bin and not (args.reachy_daemon_url or args.reachy_config):
-        parser.error("--piper-bin needs --reachy-daemon-url or --reachy-config (speech plays through the robot).")
+    if args.flite_bin and not (args.reachy_daemon_url or args.reachy_config):
+        parser.error("--flite-bin needs --reachy-daemon-url or --reachy-config (speech plays through the robot).")
     engines = {}
     managed_engines = False
     if args.engines_config:
@@ -1701,15 +1651,15 @@ def main():
     servers = []
     threads = []
     reachy_runtime = None
+    speech = None
     try:
         reachy_client = Reachy(args.reachy_daemon_url) if args.reachy_daemon_url else None
-        piper = (Piper(args.piper_bin, args.piper_model, args.piper_out_dir)
-                if args.piper_bin and args.piper_model else None)
+        speech = Flite(args.flite_bin, args.speech_out_dir) if args.flite_bin else None
         reachy_setup = None
         if args.reachy_config:
             reachy_setup = ReachySetup(args.reachy_config)
-            piper_factory = (lambda: Piper(args.piper_bin, args.piper_model, args.piper_out_dir)) if piper else None
-            reachy_runtime = ReachyRuntime(reachy_setup, piper_factory=piper_factory)
+            speech_factory = (lambda: Flite(args.flite_bin, args.speech_out_dir)) if speech else None
+            reachy_runtime = ReachyRuntime(reachy_setup, speech_factory=speech_factory)
             reachy_setup.on_change = reachy_runtime.apply
             reachy_runtime.refresh()
         if managed_engines:
@@ -1722,7 +1672,7 @@ def main():
         server.backend_port = args.backend_port
         server.reachy_address = reachy_address
         server.reachy_client = reachy_client
-        server.piper = piper
+        server.speech = speech
         server.reachy_setup = reachy_setup
         server.reachy_runtime = reachy_runtime
         server.engine_switcher = engine_switcher
@@ -1737,7 +1687,7 @@ def main():
             secure.backend_port = args.backend_port
             secure.reachy_address = reachy_address
             secure.reachy_client = reachy_client
-            secure.piper = piper
+            secure.speech = speech
             secure.reachy_setup = reachy_setup
             secure.reachy_runtime = reachy_runtime
             secure.engine_switcher = engine_switcher
@@ -1752,7 +1702,7 @@ def main():
         print(f"UI: {scheme}://{args.host}:{args.port}; backend: http://127.0.0.1:{args.backend_port}", flush=True)
         print(f"Reachy Mini bridge: {args.reachy_url}, relayed under /reachy/", flush=True)
         print(f"Reachy Mini setup: {'available in the UI' if reachy_setup else args.reachy_daemon_url or 'not configured'}", flush=True)
-        print(f"Speech: {'Piper installed; starts on first speech request when a robot is configured' if piper else 'not configured'}", flush=True)
+        print(f"Speech: {'Flite installed; starts on first speech request when a robot is configured' if speech else 'not configured'}", flush=True)
         print(f"Engines: {', '.join(engines) if engines else 'not configured'}", flush=True)
         print("UI availability does not imply model or Jetson readiness.", flush=True)
         server.serve_forever()
@@ -1766,6 +1716,8 @@ def main():
             server.server_close()
         if reachy_runtime:
             reachy_runtime.close()
+        if speech:
+            speech.close()
 
 
 if __name__ == "__main__":

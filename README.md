@@ -6,7 +6,7 @@ Live Vision is a demonstration that popular, small model vision language models 
 
 Although previous demonstrations have been done with a [nearly identical setup](https://www.jetson-ai-lab.com/tutorials/reachy-mini-jetson-assistant/) by Jetson AI lab, this entire demo can be completed by **a single prompt in an agent coding harness**.
 
-Alex Sotelo presented this original demo during [**A New Way to Build Edge AI: Agentic Development on NVIDIA Jetson**](https://www.youtube.com/live/OF_ryVZmB3w?t=1927) on **September 30, 2026, at 9:00 a.m. Pacific**. One initial agentic goal produced the first working FP16 baseline; optimization, INT4 integration, interface improvements and accuracy fixes followed. The images here come from Alex's October 2 follow-up demo. See [the build story and chapter guide](docs/demo-history.md).
+Alex Sotelo presented this original demo during [**A New Way to Build Edge AI: Agentic Development on NVIDIA Jetson**](https://www.youtube.com/live/OF_ryVZmB3w?t=1927) on **September 30, 2026, at 9:00 a.m. Pacific**. One initial agentic goal produced the first working FP16 baseline; optimization, INT4 integration, interface improvements and accuracy fixes followed. The images here come from Alex's October 2 follow-up demo.
 
 **Choose your route:** [Build from scratch with Astra (or your favorite coding agent)](#build-with-astra) · [Run the single shot, packaged demo - Agent or human configured](#run-the-packaged-demo)
 
@@ -55,7 +55,7 @@ After the initial bringup works, ask the agent to measure the same images, promp
 
 ## Run the packaged demo
 
-This candidate includes the container build and launcher, but no published runtime image or engine bundle. The [packaged runtime guide](container/README.md) describes the required artifacts and current validation status.
+To build a container from source and package your engine separately, see the [container guide](container/README.md). Prebuilt runtime images and engine bundles are not provided.
 
 To run the demo today, use the automated **source build** below. It downloads the pinned model, builds a memory-efficient Cosmos3-Edge quantization on the Jetson, configures your Orin's web server and starts the web services. **Estimated time to build is over 1 hour**; setup resumes completed stages after an interruption.
 
@@ -65,7 +65,7 @@ Complete first boot, and follow the steps to confirm SSH access to the intended 
 
 ### 2. Start setup from your computer
 
-For this preparation branch:
+Clone the demo:
 
 ```bash
 git clone --branch feat/live-vision-cosmos-demo https://github.com/NVIDIA-AI-IOT/live-vision-cosmos-demo.git
@@ -97,7 +97,7 @@ With the source installation, open **Reachy Mini setup** to discover or enter a 
 
 ![Reachy Mini camera view of a Game Boy, Jetson Orin Nano box and toy, with the generated caption](docs/media/reachy-caption-02m14s.png)
 
-The source installation prepares the Text-to-Speech (using Piper TTS) and the camera bridge. After connecting your robot, try **Auto-speak** to hear captions. The current fixed-engine container does **not** include robot camera bridging or Piper speech; use the source path for those features. No Home Assistant installation is required.
+The source installation prepares Flite speech with the built-in SLT English voice and the camera bridge. After connecting your robot, try **Auto-speak** to hear captions and adjust the speech-rate control. Flite generates each utterance locally; no separate voice download is needed. The current fixed-engine container does **not** include robot camera bridging or speech; use the source path for those features. No Home Assistant installation is required.
 
 ## Use the inference API
 
@@ -129,6 +129,6 @@ Use a small JPEG so the encoded JSON request stays below 2 MB. Read the returned
 
 ## Contributions
 
-For deeper work, start with the [source and engineering guide](docs/source-installation.md), [troubleshooting](docs/troubleshooting.md) or [demo history](docs/demo-history.md). Contributions use the process and DCO sign-off in [CONTRIBUTING.md](CONTRIBUTING.md).
+For deeper work, start with the [source and engineering guide](docs/source-installation.md), [troubleshooting](docs/troubleshooting.md). Contributions use the process and DCO sign-off in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The application's code is licensed under [Apache-2.0](LICENSE.md). The copied Pollen Robotics files in [`reachy/reachy_stream/`](reachy/reachy_stream/) retain their [Apache-2.0 license and copyright](reachy/reachy_stream/LICENSE). [NOTICE.md](NOTICE.md) records third-party and media attribution; model weights, engines and other dependencies have their own terms and are not included here. [SOURCE.json](SOURCE.json) records the imported source provenance.
+The application's code is licensed under [Apache-2.0](LICENSE.md). The copied Pollen Robotics files in [`reachy/reachy_stream/`](reachy/reachy_stream/) retain their [Apache-2.0 license and copyright](reachy/reachy_stream/LICENSE). The `licenses/` directory preserves [Flite's permissive CMU and component-specific terms](licenses/Flite-COPYING) for the optional source-built speech dependency. [NOTICE.md](NOTICE.md) records third-party and media attribution; model weights, engines and other dependencies have their own terms and are not included here. [SOURCE.json](SOURCE.json) identifies the application source and copied third-party files.

@@ -4,12 +4,10 @@
 repository root unless stated otherwise. This is the automated source-build path;
 for fixed-engine container preparation, see [the runtime guide](../container/README.md).
 
-**Upgrade candidate: TensorRT-Edge-LLM 0.11.0.** This branch requires freshly exported
-and rebuilt engines. The source trial records successful builds, structural INT4 checks,
-and corrected known-image captions. Packaged-runtime validation, physical camera streaming,
-sustained memory and controlled latency measurements remain pending. Measurements elsewhere
-in this guide describe the 0.10.1 baseline, not results for this candidate. See the
-[upgrade recommendation and validation plan](edgellm-0.11-upgrade.md).
+This demo builds the [NVIDIA TensorRT-Edge-LLM v0.11.0 SDK](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/95515c2f87fba8982db5a519f9022277667b3cc9)
+(software development kit) from source. Engines from earlier SDK versions must
+be re-exported and rebuilt. See [SDK compatibility](edgellm-0.11-upgrade.md) for
+the pinned configuration and visual-export correction.
 
 A minimal, low-RAM camera/VLM web UI that runs a locally-hosted **NVIDIA Cosmos3-Edge** model on a
 Jetson Orin over TensorRT-Edge-LLM, with live **Reachy Mini** robot control (motors, onboard apps,
@@ -24,7 +22,7 @@ Reachy Mini ─┘        │                           │
   camera/mic           │                    /api/reachy/* ──▶ Reachy Mini daemon :8000 (on the robot)
   (needs the bridge,    │                           │
    see below)           ▼                           ▼
-                   /api/engines/*              motors, apps, speaker (Piper TTS)
+                   /api/engines/*              motors, apps, speaker (Flite TTS)
                    (TensorRT engine swap)
 ```
 
@@ -44,7 +42,7 @@ the redirect hop.
 | `ui/tests/`, run via `python3 -m unittest discover -s ui/tests` and `node --test ui/tests/test_engine_switch.js ui/tests/test_reachy_setup.js` | Offline tests for inference relay, engine selection and optional Reachy setup; no device or GPU required. |
 | `scripts/bootstrap.sh` | Run **from a laptop** (any OS, no GPU required; by default it does no compute itself). Copies this repo to the Orin over SSH and runs `setup-orin.sh` there. Optional `--host-quantize` (Linux host, 12 GB+ available RAM) does the LLM quantize+export step locally instead, for the SDK's primary V2/cuteDSL plugin instead of its legacy fallback - see "Host-accelerated quantization". |
 | `scripts/set-reachy-ip.sh` | Run **on the Orin** to point the demo at a (different) Reachy Mini by IP or hostname. Uses the same discovery, verified connection and skip manager as the UI; never rebuilds or restarts the model engine. See "Optional Reachy Mini". |
-| `scripts/setup-orin.sh` | Run **on the Orin** (`bootstrap.sh` does this for you; by hand, from `/opt/live-vision-cosmos-demo`: `export REACHY_MINI_IP=...` if you have a robot, then `sudo -E bash scripts/setup-orin.sh` - no Hugging Face token needed). Idempotent, one-shot: builds TensorRT-Edge-LLM, downloads the Cosmos3-Edge checkpoint, quantizes it to INT4 with the vendored RTN pre-quantization pass, exports and builds the engine, installs Piper/TLS/systemd, starts the services. |
+| `scripts/setup-orin.sh` | Run **on the Orin** (`bootstrap.sh` does this for you; by hand, from `/opt/live-vision-cosmos-demo`: `export REACHY_MINI_IP=...` if you have a robot, then `sudo -E bash scripts/setup-orin.sh` - no Hugging Face token needed). Idempotent, one-shot: builds TensorRT-Edge-LLM, downloads the Cosmos3-Edge checkpoint, quantizes it to INT4 with the vendored RTN pre-quantization pass, exports and builds the engine, installs Flite/TLS/systemd, starts the services. |
 | `scripts/flash-jetpack-sd-mac.sh` | Optional Mac one-shot for a clean JetPack 7.2.1 SD card; helpers in `scripts/jetpack/`, agent skill in `.agents/skills/flash-jetpack-sd-mac/`. |
 | `AGENTS.md` | Setup/deployment recipe written for an AI coding agent to follow unattended, plus the "don't change these without re-deriving them" list for the pinned build constants below, and why checking generated text (not just health endpoints) matters. `CLAUDE.md` points here. |
 
@@ -66,12 +64,8 @@ diskutil list                       # identify the 64 GB+ SD card
 This optional route targets the **Orin Nano Super 8 GB developer kit (P3767-0005)**
 with compatible R39.2.1 QSPI firmware already installed. It prepares OS and NVIDIA drivers
 only. Boot the card, complete first-boot setup, enable SSH, then continue below.
-Validated on a **fresh 64 GB SD card** using this script and
-[agent skill](../.agents/skills/flash-jetpack-sd-mac/SKILL.md): full image readback,
-SD boot, wired first-time setup, a fresh login and guarded filesystem expansion
-have passed on the new board. Bounded SDK 0.11 source-engine checks are recorded in
-[first-boot recovery](first-boot-recovery.md); final packaged artifacts remain unvalidated.
-See the [Mac workflow and validation record](jetpack-sd-mac.md) for scope.
+Use [first-boot recovery](first-boot-recovery.md) if account setup or filesystem
+expansion fails. See the [Mac workflow](jetpack-sd-mac.md) for hardware requirements.
 
 Starting point: a Jetson Orin with **JetPack already flashed and booting**, reachable over
 SSH, and nothing else installed - plus any laptop (any OS, no GPU required; by default the
@@ -85,7 +79,7 @@ laptop does no compute, it just drives the Orin over SSH). End point: a working
 
 That's the whole setup - no Hugging Face token needed.
 It clones and builds TensorRT-Edge-LLM, downloads and quantizes the
-Cosmos3-Edge checkpoint, exports and builds the engine, installs Piper/TLS/systemd, and
+Cosmos3-Edge checkpoint, exports and builds the engine, installs Flite/TLS/systemd, and
 starts the model and UI, then offers optional Reachy discovery, a manual address, or skip. All compute happens on the Orin, over SSH from the laptop. It
 takes well over an hour on an Orin Nano, dominated by the on-device TensorRT-Edge-LLM native
 build; it's idempotent, so if it fails partway (a flaky download, a transient apt mirror),
@@ -106,7 +100,7 @@ caption first. Then follow [Change Wi-Fi after the demo works](network-switching
 for human and agent instructions, a guarded connection test, and restoration of
 Ethernet. The guide clearly marks hardware checks that are still pending.
 
-**Optional Reachy Mini:** the installer prepares the bridge and Piper even if you
+**Optional Reachy Mini:** the installer prepares the bridge and Flite even if you
 skip the robot. When a terminal is interactive, it offers discovered robots, a
 manual address, or **Skip**. It never selects an arbitrary robot. Noninteractive
 runs defer the choice to **Reachy Mini setup** in the UI; `REACHY_SETUP_SKIP=1` records
@@ -137,9 +131,9 @@ sudo -E bash /opt/live-vision-cosmos-demo/scripts/setup-orin.sh --reachy-only
 This installs missing robot dependencies and refreshes the UI/bridge configuration.
 It may briefly restart the UI, but does not invoke model download, quantization,
 export, engine building, clock changes or a shim restart. Do not fabricate setup
-markers to skip work. Piper is an on-demand UI child process: its first speech
-request starts the voice, which stays warm afterward. There is no Piper service
-to start manually, and no Home Assistant installation is required.
+markers to skip work. Flite runs as one bounded UI child per utterance, with no
+resident speech process afterward. There is no speech service to start manually,
+and no Home Assistant installation is required.
 
 **Robot-daemon recovery** is opt-in. When the robot's daemon wedges, the bridge can restart it
 over SSH instead of someone power-cycling the robot. To set that up, run this on the Orin as
@@ -224,7 +218,7 @@ legacy-plugin build, why, and that it still needs device validation.
   for the supported Orin Nano Super developer kit before application setup.
 - **A 64 GB SD card or larger is recommended.** The build needs CUDA/TensorRT development
   packages and intermediate model files in addition to the application and engine.
-  The setup script checks available build space; measure the final candidate's installed footprint.
+  The setup script checks available build space.
 - **NVIDIA's [TensorRT-Edge-LLM](https://github.com/NVIDIA/TensorRT-Edge-LLM) SDK**, built on
   device, to both build the Cosmos3-Edge engine and provide the Python venv the shim runs from.
   Not vendored in this repo - it's a substantial NVIDIA SDK with its own license and update cycle.
@@ -250,13 +244,24 @@ inside that directory, and build its native runtime per its own instructions
 (`kernelSrcs/build_cutedsl.py` for the `fmha` and `int4_fp16_gemm` kernel groups, then a CMake
 configure/build for the `_edgellm_runtime`, `NvInfer_edgellm_plugin`, `llm_build`, and
 `visual_build` targets), then pip-install the SDK itself into that venv, editable, with its
-`server,server-tools,export,tools` extras: that install is what provides the
-`.venv/bin/tensorrt-edgellm-export` the export steps below call, and the FastAPI and uvicorn the
-shim imports. The build needs the pinned CUDA 13.2 / TensorRT 10.16 packages first -
+`export,tools` extras. Install `fastapi==0.139.2` and `uvicorn==0.51.0` explicitly for
+the shim; this demo does not use the SDK's generic video server or its PyAV dependency.
+The `sdk_python_dependencies` stage provides `.venv/bin/tensorrt-edgellm-export` and
+migrates earlier installs by uninstalling only a verified venv-local PyAV wheel.
+It stops if inherited PyAV or leftover `av.libs` remain, without changing system packages.
+The dependency migration preserves current SDK native-build and engine markers. Setup
+checks for PyAV again on every full run, including when that stage is already complete.
+It pauses inference while updating the venv, then restarts and checks the services after
+successful setup; a failed migration leaves inference stopped until setup succeeds.
+An otherwise completed installation needs 12 GiB free for this migration, returning to
+the usual 8 GiB maintenance allowance afterward.
+Removing the SDK video extra has not yet been validated through a full Orin export;
+repeat both reasoning exports and known-image inference before accepting a fresh build.
+The build needs the pinned CUDA 13.2 / TensorRT 10.16 packages first -
 `sudo bash scripts/install-jetpack-compute.sh` (the `jetpack_compute` stage) - plus the apt
 packages in `do_system_packages`. See `scripts/setup-orin.sh`'s `do_fetch_edgellm`,
-`do_edgellm_venv` and `do_build_edgellm_runtime` for the exact commands and environment this
-repo builds against. The shim unit's `ExecStart` (the venv's python) and the shim's
+`do_edgellm_venv`, `do_build_edgellm_runtime` and `do_install_edgellm_python` for the exact
+commands and environment this repo builds against. The shim unit's `ExecStart` (the venv's python) and the shim's
 `EDGELLM_ROOT` default (where it finds the SDK's `build/` outputs) both expect that location;
 with the SDK anywhere else, edit `ExecStart` and set `EDGELLM_ROOT` for the shim - and
 `SHARED_CHECKPOINT_DIR`, whose default is relative to it. Then:
@@ -410,23 +415,52 @@ cp ui/config/engines.example.json engines.json # edit "path" to match the engine
 
 ### 3. Set up text-to-speech
 
-```
-python3 scripts/fetch-piper.py --output /opt/live-vision-cosmos-demo/piper
+The source installation uses Flite 2.2 and its built-in SLT English voice. The
+full installer prepares it automatically. For a standalone build on the Orin,
+run from the checkout as the installation owner:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y --no-install-recommends build-essential
+python3 scripts/build-flite.py --output /opt/live-vision-cosmos-demo/flite
 ```
 
-The default voice is `en_US-ljspeech-medium`. Measure speech latency on your own
-configuration if you enable this optional source-install feature. See NOTICE.md
-before substituting a different voice - several published Piper voices carry non-commercial-only
-licenses inherited from their base voice, not obvious from the filename. Custom voices
-require a reviewed `PIPER_DOWNLOAD_MANIFEST` containing pinned URLs, checksums and notices.
+The helper checks the source archive's SHA-256 and retains the original source
+and license records. It does not change a running UI or robot connection. Use
+`--jobs 1` to limit compilation to one job. A verified build is selected through
+the `flite` symlink; a failed build leaves the previous selection intact.
+
+Flite 2.2 is pinned in [flite-sources.json](../scripts/flite-sources.json). The
+selected `cmu_us_slt` voice, `usenglish` language and `cmulex` lexicon come from
+that same archive. The build uses WAV output without an audio-device backend.
+Each generation under `flite-builds/` retains its source archive, extracted
+source, original notices, build commands and rebuild helpers. Preserve those
+materials with any binary redistribution, including the original
+[Flite COPYING](../licenses/Flite-COPYING) and SLT notices. System C/math libraries
+retain their own terms.
+
+To rebuild independently, invoke the retained `rebuild/build-flite.py` with its
+`rebuild/flite-sources.json` manifest and a new output path. The helper verifies
+source checksums, linkage and nonempty PCM output before selecting the result.
+
+The UI uses `--flite-bin /opt/live-vision-cosmos-demo/flite/bin/flite` and an
+optional `--speech-out-dir` (default `/tmp/reachy_tts`). There is no separate voice
+model to download or configure. Each request starts a bounded Flite process,
+writes a PCM WAV and sends it to the connected robot. The speech-rate control
+changes synthesis duration directly; SoX is not used. Measure latency and judge
+voice quality on your own configuration.
 
 ### 4. Set up the Reachy Mini bridge (optional - only for using Reachy Mini as a video source)
 
 ```
-python3 -m venv reachy_env && reachy_env/bin/pip install -r reachy/requirements.txt
+python3 scripts/build-reachy-media.py --install-root /opt/live-vision-cosmos-demo
 ```
 
-Installs cleanly from prebuilt aarch64 wheels on JetPack + Python 3.12, no compilation needed.
+The installer builds pinned FFmpeg, LAME and PyAV sources in a separate environment,
+then verifies the loaded libraries and camera/audio codecs before selecting it.
+The first build requires a compiler, `pkg-config`, Python development headers and
+Internet access; subsequent runs reuse a verified build. The full installer prepares
+these prerequisites. See [Reachy media build and upgrade](reachy-media.md) for details.
 `requirements.txt`'s own header explains the pinned `aiortc==1.10.1`: it's the version verified
 against the robot. It has aiortc's RTX-decoding bug too - 1.10.1 and 1.14.0 both do, so upgrading
 doesn't fix it; the bridge avoids it by answering H.264 without RTX. Motor/app/TTS control
@@ -446,10 +480,10 @@ support. It renders the service account, prepares a writable `reachy.env`, insta
 restricted bridge-control permissions and registers the bridge in `services.json`
 without duplicating an existing entry.
 
-The UI always keeps `--reachy-config` and the Piper paths. An empty robot config is
+The UI always keeps `--reachy-config` and `--flite-bin`. An empty robot config is
 supported; do not remove those flags to skip Reachy. The bridge unit is installed
 and enabled but its condition skips startup when the address is empty. The UI
-loads connection changes dynamically and Piper starts only when speech is used.
+loads connection changes dynamically and Flite runs only when speech is requested.
 
 `services.json` describes additional processes for the resource panel. A stopped
 bridge after **Skip** is expected; Reachy Mini setup distinguishes prepared from
@@ -468,7 +502,6 @@ echo 'YOUR_USERNAME ALL=(root) NOPASSWD: /usr/bin/systemctl start live-vision-co
 The automated setup also pins the clocks (`do_pin_clocks`): `sudo nvpmodel -m 2` (`MAXN_SUPER` on
 the Orin Nano Super; mode IDs differ between Jetson modules, so check `nvpmodel -q` afterwards)
 and a small boot-time `jetson-clocks.service`, since `jetson_clocks` doesn't survive a reboot.
-The historical 0.10.1 trial reported a 36–60 ms reduction per request; remeasure the current engine before making a performance claim.
 
 Open `https://<orin-ip>:8443/`.
 
@@ -515,9 +548,9 @@ fake DOM (JS) stand in for both.
 ## License
 
 This repository's own code is Apache License 2.0 - see [LICENSE.md](../LICENSE.md). It talks to and builds on
-several third-party components under their own licenses - see `NOTICE.md` before redistributing,
-particularly regarding the Piper voice model and NVIDIA Cosmos model weights, neither of which
-this repository ships. The source bodies of `reachy/reachy_stream/stream.py` and `const.py`
+several third-party components under their own licenses - see [NOTICE.md](../NOTICE.md) before redistributing,
+including the original Flite/SLT notices, Reachy media libraries and NVIDIA Cosmos
+model terms. No compiled speech binary or Cosmos model weights are shipped here. The source bodies of `reachy/reachy_stream/stream.py` and `const.py`
 are copied unchanged from Pollen Robotics'
 [reachy_mini_homeassistant](https://github.com/pollen-robotics/reachy_mini_homeassistant), also
 under the Apache License 2.0.

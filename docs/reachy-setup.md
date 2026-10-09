@@ -1,7 +1,7 @@
 # Optional Reachy Mini setup
 
 Live Vision works with a browser camera and no robot. The installer prepares
-Reachy's camera/microphone bridge and Piper speech dependencies either way.
+Reachy's camera/microphone bridge and Flite speech dependencies either way.
 Choose a robot when ready; skipping does not require another engine build later.
 Home Assistant is not required.
 
@@ -12,8 +12,7 @@ listens only for the Reachy Mini mDNS service (`_reachy-mini._tcp`) and verifies
 candidates through their daemon. It does not scan a subnet or choose a robot for you.
 The advertisement follows [Pollen's discovery implementation](https://github.com/pollen-robotics/reachy_mini/blob/main/src/reachy_mini/utils/discovery.py).
 The installer adds the system packages `avahi-utils` and `avahi-daemon` for this
-discovery path. Include them in the release dependency inventory; they are installed
-dependencies, not third-party source copied into this repository. If an administrator
+discovery path. If an administrator
 has disabled the daemon, use manual setup or skip rather than overriding that policy.
 
 If the first search is empty, wait a few seconds and choose **Scan again** once.
@@ -89,43 +88,7 @@ and stopping `reachy-mjpeg-bridge.service`.
 - **Discovery unavailable:** use a verified manual address or skip. Do not sweep
   the network or disable a firewall blindly.
 
-Piper is an on-demand child of the UI, not a systemd service. The first speech
-request starts its voice model; the process remains warm for later utterances.
-Speech is useful only with a connected robot to play the audio. No Piper process
-before the first speech request is expected.
-
-## Agent acceptance checks
-
-1. Confirm the intended new Orin and retain the working inference baseline.
-2. Ask the user to select a discovered robot, provide a verified address, or skip.
-   Keep addresses and device details in private deployment notes.
-   The optional private `REACHY_EXCLUDED_ADDRESSES` setting excludes devices from
-   discovery/connection; never publish its values or reuse another board's identity.
-3. After connection, verify Reachy Mini setup, a fresh bridge frame and a real caption
-   from that frame. A saved address alone does not prove a working video feed.
-4. Test speech only when requested; report synthesis and audible playback separately.
-5. Reopen settings after **Skip** to confirm adding a robot remains possible.
-   Record performed checks separately from untested hardware behavior.
-
-## Validation on 2026-10-06
-
-The upgrade was applied to the new SD-based Orin Nano deployment using
-`--reachy-only`. The inference process kept its PID, and both language and vision
-engine hashes were unchanged. A fresh image upload still produced a coherent
-panda caption through the HTTPS UI.
-
-The bridge dependencies passed `pip check`. Starting the bridge with an empty
-address cleanly skipped its execution rather than entering a restart loop. The
-services panel showed **Not configured** for the bridge and **Idle · connect
-Reachy Mini** for Piper. A bounded discovery request returned no verified robot;
-manual entry and skip remained available. No robot was selected or controlled.
-
-A later retry discovered one robot and verified its daemon as running and ready.
-No robot reboot was performed. This confirmed the discovery path on the actual
-network; physical camera and speaker checks still require selecting that robot.
-
-Offline checks passed: 89 Python UI tests, 55 installer tests and 32 JavaScript
-tests. Desktop and mobile browser checks used synthetic robot responses to test
-selection, manual entry, persistent skip, later connection, malformed settings,
-and preservation of a running webcam. Those checks do not establish a working
-physical Reachy camera or audible speech; both remain pending robot selection.
+Flite runs as a child of the UI for each utterance, not as a systemd service.
+It uses the built-in SLT voice and exits after writing the WAV file. Speech is
+useful only with a connected robot to play the audio. An idle UI has no resident
+speech process; setup and discovery do not synthesize speech.

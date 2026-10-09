@@ -12,7 +12,7 @@ Group=YOUR_USERNAME
 WorkingDirectory=/opt/live-vision-cosmos-demo
 # --reachy-config is read dynamically: Settings can discover/connect/skip a robot
 # without restarting the UI or the model engine. No address is a supported state.
-# --piper-bin/--piper-model: see README "3. Set up text-to-speech" for where to get both.
+# --flite-bin uses the source-built Flite binary with its built-in SLT voice.
 # --cert/--key: a self-signed pair is fine - see README "5. TLS certificate" for one openssl command.
 #   Browsers refuse camera access (getUserMedia) on plain HTTP from anything but localhost, so
 #   this is required for the webcam path to work from any device but the Orin's own browser.
@@ -21,7 +21,7 @@ ExecStart=/usr/bin/python3 /opt/live-vision-cosmos-demo/ui/scripts/serve_ui.py \
   --cert /opt/live-vision-cosmos-demo/tls/cert.pem --key /opt/live-vision-cosmos-demo/tls/key.pem \
   --allow-insecure-lan --backend-port 8001 \
   --reachy-config /opt/live-vision-cosmos-demo/reachy.env \
-  --piper-bin /opt/live-vision-cosmos-demo/piper/piper --piper-model /opt/live-vision-cosmos-demo/piper/en_US-ljspeech-medium.onnx \
+  --flite-bin /opt/live-vision-cosmos-demo/flite/bin/flite \
   --engine-link /opt/live-vision-cosmos-demo/engine-link --default-engine cosmos \
   --engines-config /opt/live-vision-cosmos-demo/engines.json \
   --shim-service live-vision-cosmos-demo-shim \

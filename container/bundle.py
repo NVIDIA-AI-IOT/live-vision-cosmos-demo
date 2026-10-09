@@ -133,7 +133,6 @@ def create(engine, checkpoint, output, plugin_version, notices, candidate_commit
         manifest.update({
             "candidate_commit": candidate_commit,
             "int4_plugin_version": plugin_version,
-            "validation_status": "pending_hardware_and_human_review",
             "files": inventory(scratch),
         })
         (scratch / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

@@ -35,7 +35,7 @@ cmake --build "$EDGELLM_ROOT/build" --parallel 1 --target _edgellm_runtime NvInf
 python -m pip install --no-cache-dir 'fastapi==0.139.2' 'uvicorn==0.51.0' 'requests==2.34.2'
 python -m pip check
 PYTHONPATH="$EDGELLM_PYBIND_DIR" python -c 'import _edgellm_runtime as rt; assert hasattr(rt, "LLMRuntime")'
-# Preserve installed-package evidence and upstream source/licenses for the eventual image scan.
+# Record the packages and SDK submodules included in this image.
 python -m pip inspect > /opt/runtime-python-packages.json
 dpkg-query -W -f='${binary:Package}\t${Version}\n' > /opt/runtime-debian-packages.tsv
 git -C "$EDGELLM_ROOT" submodule status --recursive > /opt/runtime-sdk-submodules.txt

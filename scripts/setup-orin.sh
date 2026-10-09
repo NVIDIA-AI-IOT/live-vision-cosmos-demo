@@ -22,16 +22,16 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------------------
-# Configuration - v0.11.0 migration candidate. Offline checks cover the API contract;
-# a fresh Orin build and visual accuracy/performance checks are still required before
-# calling this hardware-validated. TensorRT engines must be rebuilt with this SDK.
+# Pinned model and TensorRT-Edge-LLM configuration.
+# Rebuild and validate engines when changing these revisions.
 # ---------------------------------------------------------------------------------------
 INSTALL_DIR="/opt/live-vision-cosmos-demo"
 EDGELLM_COMMIT="95515c2f87fba8982db5a519f9022277667b3cc9"   # tag v0.11.0
 COSMOS_VISUAL_LAYOUT_SHA256="a5804ab79e6210972c6be3ef2c98beee663da0bf0661510d42219d6e109531ed"
+SDK_PYTHON_DEPENDENCIES_REVISION="native-shim-v1"
+SDK_PYTHON_CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-sdk-python.py"
 COSMOS_MODEL_REPO="nvidia/Cosmos3-Edge"
 COSMOS_MODEL_REVISION="344d602b128d1bbdacb43b08d0a3626f46343e29"
-PIPER_VOICE="${PIPER_VOICE:-en_US-ljspeech-medium}"   # see NOTICE.md before changing voices
 SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-$(id -un)}}"
 REACHY_MINI_IP="${REACHY_MINI_IP:-}"
 REACHY_SETUP_SKIP="${REACHY_SETUP_SKIP:-0}"
@@ -70,7 +70,22 @@ stage_revision() {
   # export or serialized engine with the v0.11.0 source and Jinja contract.
   # Copy the matching demo sources too, including when invoked from another checkout.
   case "$1" in
-    reachy_prepare) printf 'reachy-prepare-v1\n' ;;
+    sdk_python_dependencies)
+      printf '%s:%s\n' "$EDGELLM_COMMIT" "$SDK_PYTHON_DEPENDENCIES_REVISION" ;;
+    reachy_prepare)
+      # Rebuild optional media when its sources, recipe, checks or Python pins change.
+      python3 - "${BASH_SOURCE[0]}" <<'PY'
+import hashlib
+from pathlib import Path
+import sys
+root = Path(sys.argv[1]).resolve().parents[1]
+digest = hashlib.sha256()
+for name in ("scripts/build-reachy-media.py", "scripts/verify-reachy-media.py",
+             "scripts/reachy-media-sources.json", "reachy/requirements.txt"):
+    digest.update(name.encode() + b"\0" + (root / name).read_bytes())
+print("reachy-media-v2:" + digest.hexdigest())
+PY
+      ;;
     export_onnx_visual|build_visual_layout)
       printf '%s:%s\n' "$EDGELLM_COMMIT" "$COSMOS_VISUAL_LAYOUT_SHA256" ;;
     fetch_repo_self|fetch_edgellm|edgellm_venv|build_edgellm_runtime|quantize|export_onnx_llm|validate_chat_template|build_engine|link_engine|enable_services|smoke_test)
@@ -122,7 +137,7 @@ engine_build_inputs_present() {
   # unexpectedly repeat downloads or exports under the smaller space allowance.
   local name artifact
   for name in system_packages pin_clocks fetch_repo_self jetpack_compute fetch_edgellm \
-      edgellm_venv build_edgellm_runtime download_checkpoint fix_raw_config quantize \
+      edgellm_venv build_edgellm_runtime sdk_python_dependencies download_checkpoint fix_raw_config quantize \
       export_onnx_llm export_onnx_visual validate_chat_template; do
     stage_done "$name" || return 1
   done
@@ -199,7 +214,7 @@ visual_layout_repair_inputs_present() {
   local name
   if stage_done export_onnx_visual && stage_done build_visual_layout; then return 1; fi
   for name in system_packages pin_clocks fetch_repo_self jetpack_compute fetch_edgellm \
-      edgellm_venv build_edgellm_runtime download_checkpoint fix_raw_config quantize \
+      edgellm_venv build_edgellm_runtime sdk_python_dependencies download_checkpoint fix_raw_config quantize \
       export_onnx_llm validate_chat_template build_engine; do
     stage_done "$name" || return 1
   done
@@ -214,7 +229,13 @@ visual_layout_repair_inputs_present() {
 
 minimum_free_space_gib() {
   if completed_build_artifacts_present; then
-    printf '8\n'
+    if stage_done sdk_python_dependencies; then
+      printf '8\n'
+    else
+      # Same-SDK completed installations already have export/tools, but retain
+      # extra pip/cache space while migrating their Python dependencies.
+      printf '12\n'
+    fi
   elif engine_build_inputs_present || visual_layout_repair_inputs_present; then
     # Provisional remaining-work allowance: 4 GiB build swap, serialized engines
     # and margin. This is not a measured v0.11 peak-disk-usage claim.
@@ -236,9 +257,6 @@ do_preflight() {
   # It's written into reachy.env and a URL; reject anything that isn't plainly an address.
   [[ -z "$REACHY_MINI_IP" ]] || reachy_address_valid "$REACHY_MINI_IP" \
     || die "REACHY_MINI_IP='$REACHY_MINI_IP' is not an IPv4 address or a hostname - give just the robot's address, e.g. 192.0.2.50 or reachy-mini.local."
-  # Also substituted into the UI unit, and split into lang-voice-quality by do_setup_piper.
-  [[ "$PIPER_VOICE" =~ ^[A-Za-z0-9_]+-[A-Za-z0-9_]+-[A-Za-z0-9_]+$ ]] \
-    || die "PIPER_VOICE='$PIPER_VOICE' isn't a Piper voice name (language_REGION-name-quality, e.g. en_US-ljspeech-medium)."
   command -v python3 >/dev/null || die "python3 not found - is JetPack actually flashed and booted?"
   [[ $(dpkg-query -W -f='${Version}' nvidia-l4t-core 2>/dev/null || true) == 39.2.1-* ]] \
     || die "This pinned demo requires JetPack 7.2.1 / L4T 39.2.1. An existing compatible installation is fine; for fresh Mac SD preparation see docs/jetpack-sd-mac.md."
@@ -274,7 +292,7 @@ do_system_packages() {
     build-essential binutils cmake git ca-certificates \
     python3-venv python3-dev python3-pip \
     python3-requests \
-    curl jq sox openssl
+    curl jq openssl
   # python3-requests: the UI service runs the system python3, and with a robot configured
   # (--reachy-daemon-url) it imports reachy/reachy.py, which needs requests. Ubuntu's system
   # python is externally managed (PEP 668), so this - not pip - is how it gets there.
@@ -410,7 +428,29 @@ do_build_edgellm_runtime() {
   # more workers OOMs a stock Orin Nano rather than finishing faster.
   sudo -u "$SERVICE_USER" env "${envs[@]}" cmake --build "$EDGELLM_DIR/build" --parallel 1 \
     --target _edgellm_runtime NvInfer_edgellm_plugin llm_build visual_build
-  # export (not just server,server-tools) - tensorrt-edgellm-export imports torch directly to
+}
+
+do_check_edgellm_python() {
+  sudo -u "$SERVICE_USER" "$EDGELLM_PY" "$SDK_PYTHON_CHECK"
+}
+
+do_install_edgellm_python() {
+  # Keep Python dependency installation separate from native kernels and engines.
+  pause_inference
+  local cuda_ver; cuda_ver="$(cat "$STATE_DIR/.cuda-version")"
+  local envs=(
+    "PATH=$EDGELLM_DIR/.venv/bin:/usr/local/cuda-$cuda_ver/bin:$PATH"
+    "TRT_PACKAGE_DIR=/usr" "CUDA_PATH=/usr/local/cuda-$cuda_ver"
+    "LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/local/cuda-$cuda_ver/lib64"
+    "TMPDIR=$INSTALL_DIR/data/tmp"
+    "XDG_CACHE_HOME=$INSTALL_DIR/data/cache"
+    "CUDA_CACHE_PATH=$INSTALL_DIR/data/cache/cuda"
+  )
+  mkdir -p "$INSTALL_DIR/data/tmp" "$INSTALL_DIR/data/cache/cuda"
+  chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/data"
+  # The inference environment does not need the SDK's optional video server.
+  do_check_edgellm_python
+  # tensorrt-edgellm-export imports torch directly to
   # trace/export the checkpoint; the resident-runtime server path doesn't need it (it loads a
   # prebuilt engine through the native pybind11 bindings instead), which is why this was missed
   # until the export_onnx stage actually ran and failed with ModuleNotFoundError: No module
@@ -422,8 +462,12 @@ do_build_edgellm_runtime() {
   # datasets next, then more. Installing the whole `tools` extra (torchvision/datasets/librosa/
   # soundfile/etc included) avoids further one-at-a-time whack-a-mole - confirmed as the actual
   # requirement, not a guess, by running the real visual export end to end with it installed.
-  sudo -u "$SERVICE_USER" env "${envs[@]}" "$EDGELLM_PY" -m pip install -e "$EDGELLM_DIR[server,server-tools,export,tools]"
-  # JetPack's system SciPy/CFFI/pandas don't satisfy the server/tools extras' pins under
+  # The shim uses the native binding, not the SDK's generic video server. Keep
+  # export/tools for model preparation and install its two HTTP dependencies explicitly.
+  sudo -u "$SERVICE_USER" env "${envs[@]}" "$EDGELLM_PY" -m pip install \
+    -e "$EDGELLM_DIR[export,tools]" 'fastapi==0.139.2' 'uvicorn==0.51.0'
+  do_check_edgellm_python
+  # JetPack's system SciPy/CFFI/pandas don't satisfy the tools extras' pins under
   # --system-site-packages (measured); shadow them inside the venv only. pandas specifically:
   # sklearn (pulled in by transformers' generation.candidate_generator) imports it, and the
   # system copy at /usr/lib/python3/dist-packages was built against a different numpy ABI than
@@ -436,12 +480,16 @@ do_build_edgellm_runtime() {
   # single cosmetic platform-tag mismatch was killing the whole script under set -e.
   sudo -u "$SERVICE_USER" env "${envs[@]}" "$EDGELLM_PY" -m pip check \
     || warn "pip check reported the above conflict(s) - continuing; verify nothing beyond the known nvidia-cusparselt-cu13 platform-tag quirk shows up here before trusting this blindly on a future run."
-  sudo -u "$SERVICE_USER" env "${envs[@]}" "$EDGELLM_PY" -c \
-    'from experimental.server.runtime.engine import _import_runtime; r=_import_runtime(); assert hasattr(r,"LLMRuntime"); print("native runtime import OK:", r.__file__)'
+  sudo -u "$SERVICE_USER" env "${envs[@]}" \
+    "EDGELLM_PLUGIN_PATH=$EDGELLM_DIR/build/libNvInfer_edgellm_plugin.so" \
+    "PYTHONPATH=$EDGELLM_DIR/build/pybind" "$EDGELLM_PY" -c \
+    'import _edgellm_runtime as r; assert hasattr(r,"LLMRuntime"); print("native runtime import OK:", r.__file__)'
   # XDG_CACHE_HOME (set above) scoped pip's download cache to here for this venv only, and
   # nothing after this stage does another pip install - torch's CUDA wheels alone leave a
   # multi-GB cache that's pure duplication of what's already unpacked into .venv.
   rm -rf "${INSTALL_DIR:?}/data/cache"/*
+  # Recheck the services against the installed environment, retaining all engines.
+  rm -f "$STATE_DIR/enable_services" "$STATE_DIR/smoke_test"
 }
 
 do_download_checkpoint() {
@@ -619,7 +667,7 @@ do_export_onnx_llm() {
   # that hits the OOM below.
   sudo -u "$SERVICE_USER" mkdir -p "$ONNX_DIR"
   local llm_export="$EDGELLM_DIR/.venv/bin/tensorrt-edgellm-export"
-  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the build_edgellm_runtime stage should have installed it via pip install -e '.[server,server-tools,export,tools]'."
+  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the sdk_python_dependencies stage should have installed it via pip install -e '.[export,tools]'."
   # V1 (legacy AWQ-swizzled) plugin, not the default V2: exporting with V2 (cuteDSL
   # fragment-layout) on THIS box gets OOM-killed by the kernel partway through the export
   # itself, on an 8 GB Orin Nano - even idle, with every demo service stopped: measured
@@ -645,7 +693,7 @@ do_export_onnx_visual() {
   rm -f "$STATE_DIR"/{build_visual_layout,enable_services,smoke_test}
   sudo -u "$SERVICE_USER" mkdir -p "$ONNX_DIR"
   local llm_export="$EDGELLM_DIR/.venv/bin/tensorrt-edgellm-export"
-  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the build_edgellm_runtime stage should have installed it via pip install -e '.[server,server-tools,export,tools]'."
+  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the sdk_python_dependencies stage should have installed it via pip install -e '.[export,tools]'."
   # The pinned native Cosmos runner supplies HWC patches. Remove the stale
   # exporter-only CHW permutation before loading checkpoint weights.
   sudo -u "$SERVICE_USER" "$EDGELLM_PY" \
@@ -841,16 +889,27 @@ do_link_engine() {
   [[ -f "$INSTALL_DIR/services.json" ]] || echo '{}' | sudo -u "$SERVICE_USER" tee "$INSTALL_DIR/services.json" >/dev/null
 }
 
-do_setup_piper() {
-  local dir="$INSTALL_DIR/piper"
-  python3 "$INSTALL_DIR/scripts/fetch-piper.py" --output "$dir" --voice "$PIPER_VOICE" \
-    --manifest "${PIPER_DOWNLOAD_MANIFEST:-$INSTALL_DIR/scripts/piper-downloads.json}"
-  chown -R "$SERVICE_USER:$SERVICE_USER" "$dir"
+do_setup_flite() {
+  local dir="$INSTALL_DIR/flite"
+  # Optional source builds need their tools even on an older completed install.
+  # Keep this outside the main engine stages and fail before changing speech files.
+  apt-get update -o Acquire::Retries=3 -o APT::Update::Error-Mode=any
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential
+  sudo -u "$SERVICE_USER" python3 "$INSTALL_DIR/scripts/build-flite.py" --output "$dir"
 }
 
 do_setup_reachy_env() {
-  [[ -d "$INSTALL_DIR/reachy_env" ]] || sudo -u "$SERVICE_USER" python3 -m venv "$INSTALL_DIR/reachy_env"
-  sudo -u "$SERVICE_USER" "$INSTALL_DIR/reachy_env/bin/pip" install -r "$INSTALL_DIR/reachy/requirements.txt"
+  # Build and verify a new private FFmpeg/PyAV environment before selecting it.
+  # Failed builds retain the previous selection and never modify the old reachy_env.
+  sudo -u "$SERVICE_USER" python3 "$INSTALL_DIR/scripts/build-reachy-media.py" \
+    --install-root "$INSTALL_DIR" --jobs "${REACHY_MEDIA_BUILD_JOBS:-2}"
+}
+
+do_install_service_unit() {
+  local unit="$1"
+  sed -e "s/YOUR_USERNAME/$SERVICE_USER/g" \
+    "$INSTALL_DIR/systemd/$unit" > "/etc/systemd/system/$unit"
 }
 
 do_install_reachy_units() {
@@ -862,13 +921,15 @@ do_install_reachy_units() {
   chown "$SERVICE_USER:$SERVICE_USER" "$REACHY_ENV_FILE"
   chmod 0644 "$REACHY_ENV_FILE"
   for unit in live-vision-cosmos-demo-ui.service reachy-mjpeg-bridge.service; do
-    sed -e "s/YOUR_USERNAME/$SERVICE_USER/g" -e "s/en_US-ljspeech-medium\.onnx/$PIPER_VOICE.onnx/g" \
-      "$INSTALL_DIR/systemd/$unit" > "/etc/systemd/system/$unit"
+    do_install_service_unit "$unit"
   done
   systemctl daemon-reload
   # A configured robot reconnects after reboot; blank config fails ExecCondition
   # cleanly. Enabling the unit does not start it or select a robot.
   systemctl enable reachy-mjpeg-bridge.service
+  # An existing bridge must pick up the verified environment and new unit path.
+  # try-restart leaves an inactive/skipped bridge stopped.
+  systemctl try-restart reachy-mjpeg-bridge.service
 }
 
 do_install_reachy_sudoers() {
@@ -881,7 +942,8 @@ do_install_reachy_sudoers() {
 do_prepare_reachy() {
   apt-get update -o Acquire::Retries=3
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    avahi-utils avahi-daemon python3-requests python3-venv
+    avahi-utils avahi-daemon python3-requests python3-venv python3-dev \
+    build-essential pkg-config
   do_setup_reachy_env
   do_install_reachy_units
   do_install_reachy_sudoers
@@ -992,19 +1054,22 @@ reachy_only_preflight() {
   [[ -f /etc/systemd/system/live-vision-cosmos-demo-ui.service \
       && -f "$INSTALL_DIR/ui/scripts/reachy_setup.py" ]] \
     || die "Refresh this project at $INSTALL_DIR first; --reachy-only upgrades an installed demo."
-  [[ "$PIPER_VOICE" =~ ^[A-Za-z0-9_]+-[A-Za-z0-9_]+-[A-Za-z0-9_]+$ ]] || die "Invalid PIPER_VOICE."
 }
 
 reachy_only_main() {
   reachy_only_preflight
   log "Preparing optional Reachy support; model engine and shim remain untouched."
-  do_setup_piper
+  do_setup_flite
   stage reachy_prepare do_prepare_reachy
   if [[ "$REACHY_PREPARED_THIS_RUN" -eq 0 ]]; then
     do_install_reachy_units
     do_install_reachy_sudoers
     do_register_reachy_service
   fi
+  # A maintenance upgrade must replace the former speech flags only after the
+  # new speech/media preparation succeeds. Do not restart the model shim.
+  do_install_service_unit live-vision-cosmos-demo-ui.service
+  systemctl daemon-reload
   systemctl restart live-vision-cosmos-demo-ui.service
   do_optional_reachy_setup
   log "Reachy preparation complete. Reopen the UI's Reachy Mini setup."
@@ -1028,13 +1093,11 @@ do_setup_tls() {
 }
 
 do_install_systemd_units() {
-  # The UI unit names the default voice's model file; point it at the voice actually installed
-  # (PIPER_VOICE, validated in do_preflight), or speech breaks for any other voice.
-  for unit in live-vision-cosmos-demo-shim.service; do
-    sed -e "s/YOUR_USERNAME/$SERVICE_USER/g" -e "s/en_US-ljspeech-medium\.onnx/$PIPER_VOICE.onnx/g" \
-      "$INSTALL_DIR/systemd/$unit" > "/etc/systemd/system/$unit"
+  # Optional bridge migration belongs to do_prepare_reachy, after its media build
+  # succeeds. Keep an active legacy bridge and its unit untouched until then.
+  for unit in live-vision-cosmos-demo-shim.service live-vision-cosmos-demo-ui.service; do
+    do_install_service_unit "$unit"
   done
-  do_install_reachy_units
   cp "$INSTALL_DIR/systemd/dropins/99-live-vision-cosmos-demo-swap.conf" /etc/sysctl.d/
   install -d "/etc/systemd/system/live-vision-cosmos-demo-shim.service.d"
   cp "$INSTALL_DIR/systemd/dropins/live-vision-cosmos-demo-shim.service.d-10-no-swap.conf" \
@@ -1059,7 +1122,6 @@ do_enable_services() {
   # whether this is a fresh start or a resume.
   systemctl enable live-vision-cosmos-demo-shim live-vision-cosmos-demo-ui
   systemctl restart live-vision-cosmos-demo-shim live-vision-cosmos-demo-ui
-  systemctl enable reachy-mjpeg-bridge.service
 }
 
 do_smoke_test() {
@@ -1086,6 +1148,9 @@ main() {
   stage fetch_edgellm           do_fetch_edgellm
   stage edgellm_venv            do_edgellm_venv
   stage build_edgellm_runtime   do_build_edgellm_runtime
+  stage sdk_python_dependencies do_install_edgellm_python
+  # A marker must not conceal PyAV added after the last successful setup.
+  do_check_edgellm_python
   stage download_checkpoint     do_download_checkpoint
   stage fix_raw_config          do_fix_raw_config
   stage quantize                do_quantize

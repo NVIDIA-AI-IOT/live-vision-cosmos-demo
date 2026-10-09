@@ -35,7 +35,7 @@ when reporting a repeatable failure.
 
 The pinned 0.11 installer applies a guarded HWC visual-export repair and validates
 the provider Jinja template. Do not substitute a 0.10.1 engine or its JSON template
-repair. See [the upgrade assessment](edgellm-0.11-upgrade.md) and
+repair. See [SDK compatibility](edgellm-0.11-upgrade.md) and
 [quantization/build details](source-installation.md#setup) before rebuilding.
 
 ## Reachy is missing or silent
@@ -45,8 +45,10 @@ Browser-camera captioning works without a robot. In a source installation, open
 its known address if mDNS discovery does not find it. Choosing **Skip** leaves the
 bridge stopped. See [Reachy setup](reachy-setup.md) for the supported recovery path.
 
-Piper starts on the first speech request; it is not a separate systemd service.
-The current container excludes both robot camera bridging and Piper. Use the
+Flite runs once per speech request; it is not a separate systemd service. An idle
+speech status between utterances is expected. Check that the UI points to
+`/opt/live-vision-cosmos-demo/flite/bin/flite`. The container excludes robot camera
+bridging and speech. Use the
 source installation for those features.
 
 ## I want to change Wi-Fi or restart

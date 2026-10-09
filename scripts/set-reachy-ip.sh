@@ -30,7 +30,8 @@ main() {
   local manager="$INSTALL_DIR/ui/scripts/reachy_setup.py"
   [[ -f "$manager" ]] || die "Refresh this project, then prepare robot support: sudo -E bash $INSTALL_DIR/scripts/setup-orin.sh --reachy-only"
   if [[ "$action" == connect || "$action" == skip ]]; then
-    [[ -x "$INSTALL_DIR/reachy_env/bin/python3" \
+    [[ -x "$INSTALL_DIR/reachy-media/current/venv/bin/python3" \
+       && -f "$INSTALL_DIR/reachy-media/current/verification.json" \
         && -f /etc/systemd/system/reachy-mjpeg-bridge.service ]] \
       && grep -qs -- '--reachy-config' /etc/systemd/system/live-vision-cosmos-demo-ui.service \
       || die "Prepare optional robot support first: sudo -E bash $INSTALL_DIR/scripts/setup-orin.sh --reachy-only"

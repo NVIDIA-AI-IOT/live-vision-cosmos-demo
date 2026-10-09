@@ -36,7 +36,7 @@
         </form>
         <p id="reachySetupFallback" class="hint">If discovery is blocked or finds nothing, open the Reachy Mini dashboard or your router’s connected-device list, then enter the robot’s IP address or hostname here. Keep the Orin and robot on the same local network. You can also skip Reachy and return to this panel later.</p>
         <div class="controls"><button id="reachySkipButton" type="button">Skip Reachy for now</button></div>
-        <p id="reachySetupMedia" class="hint">Configuring a robot prepares its camera bridge but does not display video, play speech or move its motors. Choose Use Reachy Mini for video, Listen for audio, or a Speak button for Piper speech through the robot’s speaker.</p>
+        <p id="reachySetupMedia" class="hint">Configuring a robot prepares its camera bridge but does not display video, play speech or move its motors. Choose Use Reachy Mini for video, Listen for audio, or a Speak button for Flite speech through the robot’s speaker.</p>
       </div>
     </details>
     <fieldset class="caption-toolbar">
@@ -71,11 +71,11 @@
           <button id="reachyMotorLimp" title="Motors off - Centre and the pose controls will be refused until Stiff is selected again">Limp</button>
         </div>
         <div class="controls">
-          <button id="reachySpeakAnswer" title="Sends the current caption (the text under the camera) to Reachy's speaker, via Piper text-to-speech running on the Orin">Speak Cosmos caption</button>
+          <button id="reachySpeakAnswer" title="Sends the current caption (the text under the camera) to Reachy's speaker, via Flite text-to-speech running on the Orin">Speak Cosmos caption</button>
           <label for="reachySpeakText" class="speech-input-label">Or type your own text for Reachy to say aloud
             <input id="reachySpeakText" type="text" placeholder="Type text, then press Speak" maxlength="500">
           </label>
-          <button id="reachySpeakButton" title="Speaks the text typed on the left through Reachy's speaker, via Piper text-to-speech running on the Orin">Speak</button>
+          <button id="reachySpeakButton" title="Speaks the text typed on the left through Reachy's speaker, via Flite text-to-speech running on the Orin">Speak</button>
         </div>
         <div class="controls" role="group" aria-label="Speech rate">
           <span class="hint control-label">Speech rate</span>
@@ -152,7 +152,7 @@
           <label>Speaker <input id="reachySpeakerVol" type="range" min="0" max="100" value="60"></label>
           <label>Mic <input id="reachyMicVol" type="range" min="0" max="100" value="60"></label>
         </div>
-        <p class="hint" id="reachyControlHint">Reasoning runs on the Orin (Cosmos3-Edge); speech synthesis also runs on the Orin (Piper) and plays through the robot's own speaker. Available any time the robot is configured, whichever feed is active - these control the robot, not the video source.</p>
+        <p class="hint" id="reachyControlHint">Reasoning runs on the Orin (Cosmos3-Edge); speech synthesis also runs on the Orin (Flite) and plays through the robot's own speaker. Available any time the robot is configured, whichever feed is active - these control the robot, not the video source.</p>
       </details>
       <audio id="reachyAudio" preload="none" hidden></audio>
       <p id="liveToggleHelp" class="hint">Turn live streaming off to keep the camera preview and run one inference at a time. Run inference also works with an uploaded image.</p>

@@ -213,7 +213,8 @@ class ReachySetup:
 
     def _prepared(self):
         root = self.config_path.parent
-        return ((root / "reachy_env/bin/python3").is_file()
+        return ((root / "reachy-media/current/venv/bin/python3").is_file()
+                and (root / "reachy-media/current/verification.json").is_file()
                 and (root / "reachy/reachy_mjpeg_bridge.py").is_file()
                 and any((Path(folder) / UNIT).is_file() for folder in
                         ("/etc/systemd/system", "/usr/lib/systemd/system", "/lib/systemd/system")))

@@ -55,8 +55,8 @@ stage reachy_prepare do_prepare_reachy
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(any("avahi-utils" in event for event in self.events()))
-        self.assertTrue(any("/reachy_env/bin/pip install -r" in event for event in self.events()))
-        self.assertEqual((self.fixture / "state/reachy_prepare").read_text().strip(), "reachy-prepare-v1")
+        self.assertTrue(any("build-reachy-media.py --install-root" in event for event in self.events()))
+        self.assertTrue((self.fixture / "state/reachy_prepare").read_text().startswith("reachy-media-v2:"))
 
     def test_robot_only_upgrade_never_enters_model_pipeline_or_controls_shim(self):
         (self.fixture / "llm.engine").write_bytes(b"unchanged engine")
@@ -65,19 +65,74 @@ stage reachy_prepare do_prepare_reachy
 reachy_only_preflight() { :; }
 do_preflight() { echo UNEXPECTED_FULL_PREFLIGHT; return 88; }
 do_build_engine() { echo UNEXPECTED_ENGINE_BUILD; return 88; }
-do_setup_piper() { echo piper >> "$FIXTURE/events"; }
+do_setup_flite() { echo flite >> "$FIXTURE/events"; }
 do_prepare_reachy() { echo prepare >> "$FIXTURE/events"; REACHY_PREPARED_THIS_RUN=1; }
 do_optional_reachy_setup() { echo choice >> "$FIXTURE/events"; }
+do_install_service_unit() { printf 'unit %s\n' "$1" >> "$FIXTURE/events"; }
 systemctl() { printf 'systemctl %s\n' "$*" >> "$FIXTURE/events"; }
 reachy_only_main
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("UNEXPECTED", result.stdout)
-        self.assertEqual(self.events(), ["piper", "prepare", "systemctl restart live-vision-cosmos-demo-ui.service", "choice"])
+        self.assertEqual(self.events(), ["flite", "prepare", "unit live-vision-cosmos-demo-ui.service", "systemctl daemon-reload", "systemctl restart live-vision-cosmos-demo-ui.service", "choice"])
         self.assertEqual((self.fixture / "llm.engine").read_bytes(), b"unchanged engine")
         self.assertEqual((self.fixture / "state/build_engine").read_text(), "preserved marker")
         unit = (ROOT / "systemd/live-vision-cosmos-demo-ui.service").read_text()
         self.assertNotIn("Wants=live-vision-cosmos-demo-shim", unit)
+
+    def test_flite_build_runs_as_deployment_owner_after_prerequisites(self):
+        result = self.run_shell('''
+apt-get() { printf 'apt %s\\n' "$*" >> "$FIXTURE/events"; }
+sudo() { printf 'sudo %s\\n' "$*" >> "$FIXTURE/events"; }
+systemctl() { echo UNEXPECTED_SERVICE_CHANGE; return 88; }
+do_setup_flite
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        events = self.events()
+        self.assertTrue(events[0].startswith('apt update'))
+        self.assertIn('APT::Update::Error-Mode=any', events[0])
+        self.assertTrue(all(tool in events[1] for tool in ('build-essential',)))
+        self.assertTrue(events[2].startswith('sudo -u fixture python3 '))
+        self.assertIn('build-flite.py --output', events[2])
+
+    def test_flite_prerequisite_failure_preserves_current_installation(self):
+        current = self.fixture / 'flite'
+        current.mkdir()
+        (current / 'flite').write_text('old executable')
+        result = self.run_shell('''
+apt-get() { return 45; }
+sudo() { echo UNEXPECTED_BUILD >> "$FIXTURE/events"; }
+do_setup_flite
+''')
+        self.assertEqual(result.returncode, 45, result.stderr)
+        self.assertFalse(self.events())
+        self.assertEqual((current / 'flite').read_text(), 'old executable')
+
+    def test_speech_failure_does_not_rewrite_units_or_restart_the_demo(self):
+        result = self.run_shell('''
+reachy_only_preflight() { :; }
+do_setup_flite() { return 46; }
+do_prepare_reachy() { echo UNEXPECTED_MEDIA >> "$FIXTURE/events"; }
+do_install_service_unit() { echo UNEXPECTED_UNIT >> "$FIXTURE/events"; }
+systemctl() { echo UNEXPECTED_SERVICE >> "$FIXTURE/events"; }
+reachy_only_main
+''')
+        self.assertEqual(result.returncode, 46, result.stderr)
+        self.assertFalse(self.events())
+
+    def test_media_build_failure_does_not_install_units_or_change_selection(self):
+        selected = self.fixture / "reachy-media/current"
+        selected.parent.mkdir()
+        selected.symlink_to("previous-verified-build")
+        result = self.run_shell('''
+apt-get() { :; }
+sudo() { return 44; }
+do_install_reachy_units() { echo UNEXPECTED_UNITS >> "$FIXTURE/events"; }
+do_prepare_reachy
+''')
+        self.assertEqual(result.returncode, 44, result.stderr)
+        self.assertEqual(os.readlink(selected), "previous-verified-build")
+        self.assertFalse(self.events())
 
     def test_explicit_skip_never_runs_discovery_or_connect(self):
         result = self.run_shell('''
@@ -87,6 +142,62 @@ do_optional_reachy_setup
 ''')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.events(), ["skip"])
+
+    def test_baseline_service_install_does_not_require_or_enable_unbuilt_bridge(self):
+        result = self.run_shell('''
+do_install_service_unit() { printf 'unit %s\\n' "$1" >> "$FIXTURE/events"; }
+do_install_reachy_units() { echo UNEXPECTED_BRIDGE_MIGRATION; return 88; }
+cp() { :; }
+install() { :; }
+sysctl() { :; }
+systemctl() {
+  [[ "$*" != *reachy-mjpeg-bridge* ]] || return 88
+  printf 'systemctl %s\\n' "$*" >> "$FIXTURE/events"
+}
+do_install_systemd_units
+do_enable_services
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("UNEXPECTED", result.stdout)
+        self.assertEqual(self.events(), [
+            "unit live-vision-cosmos-demo-shim.service",
+            "unit live-vision-cosmos-demo-ui.service",
+            "systemctl daemon-reload",
+            "systemctl enable live-vision-cosmos-demo-shim live-vision-cosmos-demo-ui",
+            "systemctl restart live-vision-cosmos-demo-shim live-vision-cosmos-demo-ui",
+        ])
+
+    def test_full_upgrade_keeps_legacy_bridge_when_optional_preparation_fails(self):
+        legacy_unit = self.fixture / "reachy-mjpeg-bridge.service"
+        legacy_unit.write_text("ExecStart=/legacy/reachy_env/bin/python3 bridge.py\n")
+        running = self.fixture / "bridge-running"
+        running.write_text("legacy process")
+        result = self.run_shell('''
+do_install_service_unit() {
+  printf 'new %s\\n' "$1" > "$FIXTURE/$1"
+}
+cp() { :; }
+install() { :; }
+sysctl() { :; }
+systemctl() {
+  printf 'systemctl %s\\n' "$*" >> "$FIXTURE/events"
+  if [[ "$*" == *reachy-mjpeg-bridge* ]]; then
+    rm "$FIXTURE/bridge-running"
+    return 88
+  fi
+}
+bash() { return 42; }
+do_install_systemd_units
+do_enable_services
+run_optional_reachy_preparation
+echo BASELINE_AVAILABLE
+''')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("BASELINE_AVAILABLE", result.stdout)
+        self.assertIn("optional Reachy preparation failed", result.stderr)
+        self.assertEqual(legacy_unit.read_text(), "ExecStart=/legacy/reachy_env/bin/python3 bridge.py\n")
+        self.assertEqual(running.read_text(), "legacy process")
+        self.assertFalse(any("reachy-mjpeg-bridge" in event for event in self.events()))
 
     def test_optional_preparation_failure_keeps_running_baseline_available(self):
         result = self.run_shell('''
@@ -177,6 +288,11 @@ do_register_reachy_service
         (self.fixture / "source.py").write_text("print('fixture')")
         for name in ("reachy.env", "reachy-setup.json", "reachy-setup.lock", ".reachy-secret-temp"):
             (self.fixture / name).write_text("private device fixture")
+        (self.fixture / "reachy-media/pinned/lib").mkdir(parents=True)
+        (self.fixture / "reachy-media/pinned/lib/libavcodec.so").write_bytes(b"compiled media fixture")
+        (self.fixture / "flite-builds/review/bin").mkdir(parents=True)
+        (self.fixture / "flite-builds/review/bin/flite").write_bytes(b"speech binary")
+        (self.fixture / "flite").symlink_to("flite-builds/review")
         (self.fixture / "scripts").mkdir()
         archive_script = self.fixture / "scripts/archive-source.sh"
         shutil.copyfile(ROOT / "scripts/archive-source.sh", archive_script)
@@ -186,6 +302,7 @@ do_register_reachy_service
             names = archive.getnames()
         self.assertTrue(any(name.endswith("source.py") for name in names))
         self.assertFalse(any("reachy" in name for name in names))
+        self.assertFalse(any("flite" in name for name in names))
 
 
 if __name__ == "__main__":

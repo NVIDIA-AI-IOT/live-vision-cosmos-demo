@@ -21,6 +21,13 @@ node_modules/
 *.tar.zst
 .venv/
 reachy_env/
+reachy-media/
+piper/
+piper-builds/
+piper-download-cache/
+flite/
+flite-builds/
+flite-download-cache/
 external/
 checkpoints/
 engines/

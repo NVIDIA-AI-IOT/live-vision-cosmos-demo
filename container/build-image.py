@@ -14,7 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-image", required=True, help="Approved NVIDIA JetPack development image @sha256 digest")
     parser.add_argument("--image-id-file", type=Path, required=True, help="Write immutable local image ID outside this source tree")
-    parser.add_argument("--candidate-commit", required=True, help="Git commit of this preparation branch used for image and engine")
+    parser.add_argument("--candidate-commit", required=True, help="Source commit used for image and engine")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     if not re.fullmatch(r"nvcr\.io/[A-Za-z0-9_./:-]+@sha256:[0-9a-f]{64}", args.base_image):

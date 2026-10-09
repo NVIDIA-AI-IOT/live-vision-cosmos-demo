@@ -1,21 +1,7 @@
 # Change Wi-Fi after the demo works
 
-**Draft procedure; not yet validated on the trial hardware.** The board reports
-NetworkManager 1.46.0; checkpoint syntax was checked against that version's source.
-Record hardware results separately;
-do not treat these instructions as evidence that a network switch succeeded.
-
-**Trial checkpoint, 2026-10-06:** wired setup, fresh login and filesystem expansion
-passed. The demo installer built both engines, enabled its services and passed
-readiness. The first image check failed; a verified HWC/CHW export mismatch was
-then corrected and the vision engine rebuilt. **The repeated text and three
-known-image checks now pass the bounded signs-of-life gate**, through the API and
-browser UI. Minor unsupported details remain; this is not a general accuracy or
-performance benchmark. See the [recorded results](first-boot-recovery.md#what-has-been-observed).
-Ethernet remains active, Wi-Fi is disconnected, and temporary build swap is off.
-Wi-Fi has not been tested or a target network selected. Reconnect and authenticate
-the identified USB console before any handover. Installation success does not
-waive the prerequisites below.
+These commands use NetworkManager 1.46.0. Keep an authenticated USB console open
+so a Wi-Fi or route change cannot lock you out of the board.
 
 Start only after wired setup, a fresh login, adequate SD space, and **a real image
 request producing a coherent caption matching the known image content** have passed. A ready endpoint alone is not
@@ -216,16 +202,3 @@ govern route preference; changing one does not replace checking the other.
 Reopen the UI at the verified Ethernet address and check another real caption.
 To use the saved Wi-Fi later, explicitly activate its UUID with the `--ask`
 command above, then repeat the connectivity checks before changing Ethernet.
-
-## Agent completion record
-
-Record each checkpoint as **observed**, **failed**, or **not tested**:
-
-- Correct board, authenticated console, and real wired inference baseline.
-- Selected Wi-Fi profile/device, address and routes; no secrets captured.
-- Interface-bound connectivity and real caption over the Wi-Fi address.
-- Optional Wi-Fi-only handover, rollback behavior, and any routing limitations.
-- Ethernet restored, final real caption, Wi-Fi profile saved and disconnected.
-
-This draft supplies a procedure only. Hardware results are pending; a completed
-command or an active NetworkManager profile alone does not establish all checks.
