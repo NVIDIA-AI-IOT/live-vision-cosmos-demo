@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-# Vendored quantizer by the same author as this repository
+# NVIDIA-authored quantizer distributed under Apache-2.0
 # (not part of NVIDIA's public TensorRT-Edge-LLM SDK - there is no upstream RTN quantizer in
 # that pin). Apache-2.0; see NOTICE.md. Expects to live at
 # <install-dir>/vendor/quantize_cosmos3_rtn.py - it resolves its own project root from

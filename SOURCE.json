@@ -27,5 +27,21 @@
       "license_file": "reachy/reachy_stream/LICENSE"
     }
   ],
+  "nvidia_source_references": [
+    {
+      "name": "Live VLM WebUI prompt labels and text",
+      "repository": "https://github.com/NVIDIA-AI-IOT/live-vlm-webui",
+      "source_reference_commit": "2fd5ba0b334c334d24bf0f9439d8742b243d22be",
+      "files": [
+        {
+          "local": "ui/web/app.js",
+          "upstream": "static/index.html#promptPreset",
+          "changes": "Prompt labels and text incorporated into the application UI"
+        }
+      ],
+      "license": "Apache-2.0",
+      "copyright": "Copyright (c) 2025 NVIDIA Corporation & Affiliates. All rights reserved."
+    }
+  ],
   "demonstration_media_manifest": "docs/media/manifest.json"
 }

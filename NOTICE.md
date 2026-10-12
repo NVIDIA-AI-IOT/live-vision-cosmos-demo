@@ -28,14 +28,15 @@ under its own Apache-2.0 license.
 `ui/web/app.js` retains prompt labels and text from
 [NVIDIA-AI-IOT/live-vlm-webui](https://github.com/NVIDIA-AI-IOT/live-vlm-webui),
 Copyright (c) 2025 NVIDIA Corporation & Affiliates., under Apache-2.0.
-The attribution remains in that file.
+The source is `static/index.html#promptPreset` at commit
+`2fd5ba0b334c334d24bf0f9439d8742b243d22be`. The attribution remains in that file.
 
 ### RTN quantizer
 
-`vendor/quantize_cosmos3_rtn.py` is Apache-2.0 code by the same author as this
-application. Its local modifications store quantization metadata in `config.json`
-and describe that format in generated checkpoint documentation. Original notices
-remain in the file. The quantizer is separate from TensorRT-Edge-LLM.
+`vendor/quantize_cosmos3_rtn.py` is NVIDIA-authored code distributed with this
+application under Apache-2.0. It stores quantization metadata in `config.json`
+and describes that format in generated checkpoint documentation. Its NVIDIA
+copyright notice remains in the file. The quantizer is separate from TensorRT-Edge-LLM.
 
 ## NVIDIA inference and model components
 
@@ -61,6 +62,12 @@ with the GCC Runtime Library Exception; tqdm includes MPL-2.0 and MIT terms.
 Preserve complete package notices and applicable exception text. The source
 installer excludes unused SDK video-server extras. The fixed-engine container
 uses a smaller dependency set, declared in `container/build-runtime.sh`.
+
+The separately installed [NVIDIA CUTLASS DSL 4.7.0 Python package](https://pypi.org/project/nvidia-cutlass-dsl/4.7.0/)
+and its `nvidia-cutlass-dsl-libs-*` packages use the proprietary NVIDIA Software
+License Agreement supplied in their distributions. These package terms are
+distinct from the CUTLASS C++ source license. Preserve their original license
+files; any redistribution must follow the grants and restrictions in that agreement.
 
 CUDA 13.2, TensorRT 10.16.2.10, and JetPack / Jetson Linux have accompanying NVIDIA
 and component terms; this application's license does not replace them. Container
