@@ -11,8 +11,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SDK = "95515c2f87fba8982db5a519f9022277667b3cc9"
-VISUAL_REVISION = SDK + ":a5804ab79e6210972c6be3ef2c98beee663da0bf0661510d42219d6e109531ed"
+SDK = "71dd1bae032e70771265917ec74d3ff4cad07a10"
+VISUAL_REVISION = SDK + ":cf64ded55bd39cd8a1910b47340f5bab47207f12131a8f362525212e5fd55917"
 HEAVY_STAGES = (
     "fetch_edgellm", "edgellm_venv", "build_edgellm_runtime", "quantize",
     "export_onnx_llm", "export_onnx_visual", "validate_chat_template", "build_engine", "build_visual_layout",
@@ -21,7 +21,7 @@ ARTIFACTS = (
     "sdk/.venv/bin/python", "sdk/build/examples/llm/llm_build",
     "sdk/build/examples/multimodal/visual_build", "sdk/build/libNvInfer_edgellm_plugin.so",
     "onnx/llm/model.onnx", "onnx/visual/model.onnx",
-    "engines/llm.engine", "engines/visual/visual.engine", "engines/chat_template.jinja",
+    "engines/llm.engine", "engines/visual/visual.engine", "engines/processed_chat_template.json",
 )
 ENGINE_READY_STAGES = (
     "system_packages", "pin_clocks", "fetch_repo_self", "jetpack_compute", "fetch_edgellm",
@@ -181,7 +181,11 @@ class SetupFailureGuards(unittest.TestCase):
                 "tensors": [{"location": "weights.bin", "offset": "16", "length": "4096"}],
             }))
             (directory / "weights.bin").write_bytes(b"x" * 4112)
-        (self.fixture / "onnx/llm/chat_template.jinja").write_bytes((raw / "chat_template.jinja").read_bytes())
+        (self.fixture / "onnx/llm/processed_chat_template.json").write_text(json.dumps({
+            "roles": {role: {"prefix": role, "suffix": "end"} for role in ("system", "user", "assistant")},
+            "generation_prompt": "assistant",
+            "content_types": {"image": {"format": "<|vision_start|><|image_pad|><|vision_end|>"}},
+        }))
 
     def swap_fixture(self):
         path = self.fixture / "build-swap.img"
@@ -248,7 +252,7 @@ class SetupFailureGuards(unittest.TestCase):
         engine = self.fixture / "engines"
         engine.mkdir()
         (engine / "llm.engine").write_bytes(b"unchanged language engine")
-        (engine / "chat_template.jinja").write_bytes((self.fixture / "raw/chat_template.jinja").read_bytes())
+        (engine / "processed_chat_template.json").write_bytes((self.fixture / "onnx/llm/processed_chat_template.json").read_bytes())
         (self.fixture / "state/build_engine").write_text(SDK + "\n")
         (self.fixture / "state/export_onnx_visual").write_text(SDK + "\n")
         result = self.run_shell("minimum_free_space_gib; stage_done build_engine; if stage_done export_onnx_visual; then exit 42; fi")
@@ -290,7 +294,7 @@ sudo() {
     *"/llm_build "*)
       echo language-builder >> "$FIXTURE/events"
       printf 'language engine' > "$ENGINE_DIR/llm.engine"
-      cp "$RAW_DIR/chat_template.jinja" "$ENGINE_DIR/chat_template.jinja" ;;
+      cp "$ONNX_DIR/llm/processed_chat_template.json" "$ENGINE_DIR/processed_chat_template.json" ;;
     *"/visual_build "*)
       echo visual-builder >> "$FIXTURE/events"
       mkdir -p "$ENGINE_DIR/visual"
@@ -382,9 +386,9 @@ stage smoke_test do_smoke_test
             model_path.write_text(json.dumps(model))
             self.assertEqual(self.run_shell("minimum_free_space_gib").stdout.strip(), "25")
 
-    def test_engine_resume_requires_unchanged_provider_template(self):
+    def test_engine_resume_requires_valid_processed_template(self):
         self.populate_engine_ready()
-        exported = self.fixture / "onnx/llm/chat_template.jinja"
+        exported = self.fixture / "onnx/llm/processed_chat_template.json"
         original = exported.read_bytes()
         for changed in (b"", b"rewritten template"):
             exported.write_bytes(changed)

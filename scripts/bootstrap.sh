@@ -35,7 +35,7 @@ set -euo pipefail
 # exactly - --host-quantize exports against the same pinned SDK commit and checkpoint
 # revision the Orin itself builds against, so the ONNX this produces is interchangeable
 # with what do_export_onnx_llm would have produced on-device.
-EDGELLM_COMMIT="95515c2f87fba8982db5a519f9022277667b3cc9"   # tag v0.11.0
+EDGELLM_COMMIT="71dd1bae032e70771265917ec74d3ff4cad07a10"   # tag v0.10.0
 COSMOS_MODEL_REPO="nvidia/Cosmos3-Edge"
 COSMOS_MODEL_REVISION="344d602b128d1bbdacb43b08d0a3626f46343e29"
 # The source host-export preflight requires 12 GiB available RAM. Lower-memory hosts
@@ -193,11 +193,11 @@ run_host_quantize() {
   git -c credential.helper= -C "$scratch/edgellm" submodule update --quiet --init --recursive \
     || { echo "!! submodule checkout failed - falling back to the standard on-Orin path." >&2; return 1; }
 
-  echo "    creating a local venv and installing the export extra (no native build, no GPU needed)"
+  echo "    creating a local venv and installing the tools extra (no native build, no GPU needed)"
   python3 -m venv "$scratch/venv"
   local py="$scratch/venv/bin/python"
   "$py" -m pip install --quiet --upgrade pip
-  "$py" -m pip install --quiet -e "$scratch/edgellm[export]" \
+  "$py" -m pip install --quiet -e "$scratch/edgellm[tools]" \
     || { echo "!! pip install failed - falling back to the standard on-Orin path. If this failed importing cuda-bindings, an NVIDIA driver may be required on this host even for the CPU-only export path." >&2; return 1; }
 
   echo "    downloading the raw checkpoint from Hugging Face (same files setup-orin.sh would fetch)"
@@ -298,8 +298,8 @@ PY
     --task reasoning --skip-visual --int4-gemm-plugin-version 2 \
     || { echo "!! V2 export failed on this host too - falling back to the standard on-Orin path (legacy V1 plugin)." >&2; return 1; }
   [[ -f "$onnx/llm/model.onnx" ]] || { echo "!! export reported success but $onnx/llm/model.onnx is missing - falling back to the standard on-Orin path." >&2; return 1; }
-  cmp -s "$raw/chat_template.jinja" "$onnx/llm/chat_template.jinja" \
-    || { echo "!! v0.11.0 export did not preserve the provider Jinja template - refusing this export." >&2; return 1; }
+  [[ -s "$onnx/llm/processed_chat_template.json" ]] \
+    || { echo "!! Export lacks the processed chat template - refusing this export." >&2; return 1; }
   printf '%s\n' "$EDGELLM_COMMIT" > "$onnx/llm/.edgellm-commit"
 
   # Staged beside the live export, never over it, and flagged complete only once the copy has

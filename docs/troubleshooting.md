@@ -33,9 +33,8 @@ or that INT4 weights were interpreted correctly. Test coherent text, then known
 images and changing live frames. Save the inputs, outputs and engine identity
 when reporting a repeatable failure.
 
-The pinned 0.11 installer applies a guarded HWC visual-export repair and validates
-the provider Jinja template. Do not substitute a 0.10.1 engine or its JSON template
-repair. See [SDK compatibility](edgellm-0.11-upgrade.md) and
+The installer applies a guarded HWC-to-CHW visual-export repair and validates
+the processed JSON chat template. Re-export and rebuild when changing SDK versions. See [SDK compatibility](edgellm-compatibility.md) and
 [quantization/build details](source-installation.md#setup) before rebuilding.
 
 ## Reachy is missing or silent

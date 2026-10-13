@@ -34,7 +34,7 @@ def require_absent():
     if problems:
         raise DependencyError("PyAV remains visible: " + "; ".join(problems)
                               + ". Use a clean TensorRT-Edge-LLM virtual environment with the "
-                              "export/tools extras, without the server extra; remove inherited "
+                              "base/tools dependencies, without the server extra; remove inherited "
                               "PyAV paths from PYTHONPATH. This check changes no packages or files.")
 
 

@@ -47,7 +47,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_REVISION = "344d602b128d1bbdacb43b08d0a3626f46343e29"
-BACKEND_REVISION = "95515c2f87fba8982db5a519f9022277667b3cc9"
+BACKEND_REVISION = "71dd1bae032e70771265917ec74d3ff4cad07a10"
 GROUP_SIZE = 128
 BLOCK_ELEMENTS = 1 << 20
 ALIASES = {"to_q": "q_proj", "to_k": "k_proj", "to_v": "v_proj", "to_out": "o_proj"}

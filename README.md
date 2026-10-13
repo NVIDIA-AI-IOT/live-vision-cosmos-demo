@@ -24,7 +24,7 @@ Alex Sotelo presented this original demo during [**A New Way to Build Edge AI: A
 
 Keep a compatible JetPack installation. If the board needs an operating system first, follow the [supported Mac SD preparation guide](docs/jetpack-sd-mac.md) and [first-boot checks](docs/first-boot-recovery.md), then return here.
 
-The source installer provides **CUDA 13.2**, uses **TensorRT 10.16.2.10** for matching engines, and builds the pinned **TensorRT-Edge-LLM 0.11.0** revision. The [runtime compatibility record](container/runtime-spec.json) lists exact identities. Model inference runs locally on the Jetson; a coding agent may use a remote service while helping you build it.
+The source installer provides **CUDA 13.2**, uses **TensorRT 10.16.2.10** for matching engines, and builds the pinned **TensorRT-Edge-LLM 0.10.0** revision. The [runtime compatibility record](container/runtime-spec.json) lists exact identities. Model inference runs locally on the Jetson; a coding agent may use a remote service while helping you build it.
 
 <a id="build-with-astra"></a>
 

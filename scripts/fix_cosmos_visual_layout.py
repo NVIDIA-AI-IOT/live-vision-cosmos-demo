@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Preserve Cosmos HWC patch weights for the pinned Edge-LLM 0.11 HWC runtime.
+"""Adapt Cosmos HWC checkpoint weights to the pinned Edge-LLM CHW runtime.
 
 Original compatibility applier; no vendor function bodies are included here.
 Reject other SDK revisions and unexpected source changes instead of guessing.
@@ -15,45 +15,42 @@ import subprocess
 import tempfile
 
 
-SDK_COMMIT = "95515c2f87fba8982db5a519f9022277667b3cc9"
+SDK_COMMIT = "71dd1bae032e70771265917ec74d3ff4cad07a10"
 MODULE = Path("tensorrt_edgellm/models/cosmos3_reasoner/modeling_cosmos3_reasoner_visual.py")
-ORIGINAL_SHA256 = "59cff8a4450dbd3f26c625236a184005d359a05ff89ee21225e652ab5564e898"
-PATCHED_SHA256 = "a5804ab79e6210972c6be3ef2c98beee663da0bf0661510d42219d6e109531ed"
+ORIGINAL_SHA256 = "ae2325a659f57444cf562407c64bcc5f835b76607c53925c7c8dcc789d120f47"
+PATCHED_SHA256 = "cf64ded55bd39cd8a1910b47340f5bab47207f12131a8f362525212e5fd55917"
 
 
 def corrected_source(source):
-    """Remove the obsolete loader transform without changing any other weights."""
+    """Adapt HWC checkpoint columns to the pinned native CHW patch input."""
     tree = ast.parse(source)
-    helpers = [node for node in tree.body if isinstance(node, ast.FunctionDef)
-               and node.name == "_adapt_patch_embedding_weight_for_chw_input"]
     loaders = [node for node in tree.body if isinstance(node, ast.FunctionDef)
                and node.name == "load_cosmos3_reasoner_visual_weights"]
-    if len(helpers) != 1 or len(loaders) != 1:
-        raise ValueError("Unexpected Cosmos visual helper/loader structure")
-    transforms = [node for node in loaders[0].body if isinstance(node, ast.FunctionDef)
-                  and node.name == "_transform"]
-    arguments = [kw for node in ast.walk(loaders[0]) if isinstance(node, ast.Call)
-                 and isinstance(node.func, ast.Name) and node.func.id == "load_submodule_weights"
-                 for kw in node.keywords if kw.arg == "transform"
-                 and isinstance(kw.value, ast.Name) and kw.value.id == "_transform"]
-    if len(transforms) != 1 or len(arguments) != 1:
-        raise ValueError("Unexpected Cosmos visual transform call")
+    if len(loaders) != 1:
+        raise ValueError("Unexpected Cosmos visual loader structure")
+    calls = [node for node in loaders[0].body if isinstance(node, ast.Expr)
+             and isinstance(node.value, ast.Call)
+             and isinstance(node.value.func, ast.Name)
+             and node.value.func.id == "load_submodule_weights"]
+    if len(calls) != 1:
+        raise ValueError("Unexpected Cosmos visual weight-loading call")
     lines = source.splitlines(keepends=True)
-    for node in sorted([helpers[0], transforms[0], arguments[0]],
-                       key=lambda item: item.lineno, reverse=True):
-        del lines[node.lineno - 1:node.end_lineno]
+    correction = """    # Cosmos checkpoints flatten each patch HWC; the native runner supplies CHW.
+    # Copy the mapping so callers retain their original checkpoint tensors.
+    weights = dict(weights)
+    key = "model.visual.embeddings.patch_embedding.weight"
+    if key in weights:
+        weight = weights[key]
+        patch = model.patch_size
+        if weight.ndim != 2 or weight.shape[1] != patch * patch * 3:
+            raise ValueError("Unexpected Cosmos patch-embedding weight shape")
+        weights[key] = (weight.reshape(weight.shape[0], patch, patch, 3)
+                       .permute(0, 3, 1, 2).contiguous().reshape_as(weight))
+
+"""
+    lines.insert(calls[0].lineno - 1, correction)
     result = "".join(lines)
-    start = result.index("``input`` carries")
-    end = result.index("``fast_pos_embed_idx``", start)
-    result = (result[:start]
-              + "``input`` contains patches in spatial merge-block order. The Cosmos3\n"
-                "runtime flattens each patch in HWC (channel-last) order, matching the\n"
-                "checkpoint processor. Keep the original patch-embedding weight columns;\n"
-                "do not apply a channel-first permutation during checkpoint loading.\n\n"
-              + result[end:])
     ast.parse(result)
-    if "_adapt_patch_embedding_weight_for_chw_input" in result:
-        raise ValueError("Obsolete patch transform remains referenced")
     return result
 
 
@@ -78,7 +75,7 @@ def apply_fix(sdk, check=False):
     if check:
         return "correction required"
     # Atomic replacement preserves mode and every untouched original notice/line.
-    descriptor, temporary = tempfile.mkstemp(prefix=".cosmos-hwc-", dir=module.parent)
+    descriptor, temporary = tempfile.mkstemp(prefix=".cosmos-layout-", dir=module.parent)
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(updated)
@@ -99,7 +96,7 @@ def main():
         state = apply_fix(args.sdk, args.check)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Cosmos visual layout: {error}\n")
-    print(f"Cosmos visual layout: {state}; expected HWC source {PATCHED_SHA256}")
+    print(f"Cosmos visual layout: {state}; expected CHW source {PATCHED_SHA256}")
 
 
 if __name__ == "__main__":

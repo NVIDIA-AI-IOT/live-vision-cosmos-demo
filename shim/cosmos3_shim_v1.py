@@ -32,11 +32,6 @@ from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
 MODEL_ID = "nvidia/Cosmos3-Edge"
 ENGINE_DIR = os.environ.get("ENGINE_DIR", "/opt/live-vision-cosmos-demo/engine-link")
 
-# The checkpoint an engine without its own model/ directory falls back to (see _checkpoint_for
-# below) - the exported ONNX/checkpoint directory from the same build that produced ENGINE_DIR.
-SHARED_CHECKPOINT_DIR = os.environ.get(
-    "SHARED_CHECKPOINT_DIR", f"{EDGELLM_ROOT}/../../checkpoints/Cosmos3-Edge/onnx/reasoning/llm")
-
 DATA_URL_RE = re.compile(r"^data:(?P<mime>[\w/+.-]+);base64,(?P<data>.+)$", re.DOTALL)
 
 app = FastAPI()
@@ -45,41 +40,27 @@ _pool = ThreadPoolExecutor(max_workers=1)
 _runtime = None
 
 
-def _checkpoint_for(engine_dir: str) -> str:
-    """Pick the checkpoint belonging to whichever engine is symlinked in right now.
-
-    Hardcoding one checkpoint was fine while every build was W4A16 with its weights inside
-    llm.engine. A weight-stripped build is not: its llm.engine is ~16 MB and refits from its
-    own model/ directory at load time. Handing such an engine the shared checkpoint aborts in
-    externalWeightManager with "missing tensor embed_tokens.weight" - which is misleading,
-    because that tensor is present in the build's own checkpoint and simply absent from the
-    one it was wrongly given.
-
-    Layout convention: <build>/engines/reasoning is the engine, <build>/model is its
-    checkpoint. Builds without that directory keep the shared checkpoint, so builds with their
-    weights inside llm.engine are unaffected.
-    """
-    real = os.path.realpath(engine_dir)
-    own = os.path.realpath(os.path.join(real, os.pardir, os.pardir, "model"))
-    return own if os.path.isdir(own) else SHARED_CHECKPOINT_DIR
-
-
 def _init_runtime():
     global _runtime
-    # v0.11.0 no longer reads processed_chat_template.json. An engine made by
-    # v0.10.1 needs a fresh export/build; fabricating a template here would hide
-    # both that incompatible engine ABI and a possible multimodal prompt error.
-    template = Path(ENGINE_DIR) / "chat_template.jinja"
-    if not template.is_file() or not template.read_bytes().strip():
-        raise RuntimeError("Engine lacks provider chat_template.jinja; rebuild the Cosmos3-Edge "
-                           "LLM and vision engines with TensorRT-Edge-LLM v0.11.0.")
-    if (Path(ENGINE_DIR) / "chat_template.model").exists():
-        raise RuntimeError("Conflicting native chat-template marker in Cosmos engine directory.")
-    checkpoint_dir = _checkpoint_for(ENGINE_DIR)
-    print(f"[shim] engine     = {os.path.realpath(ENGINE_DIR)}", flush=True)
-    print(f"[shim] checkpoint = {checkpoint_dir}", flush=True)
+    template = Path(ENGINE_DIR) / "processed_chat_template.json"
+    try:
+        data = json.loads(template.read_text())
+        image_format = data["content_types"]["image"]["format"]
+        roles = data["roles"]
+        valid = (image_format == "<|vision_start|><|image_pad|><|vision_end|>"
+                 and data.get("generation_prompt")
+                 and all(roles.get(role, {}).get("prefix") and roles.get(role, {}).get("suffix")
+                         for role in ("system", "user", "assistant"))
+                 and not roles["user"]["prefix"].startswith(
+                     roles["system"]["prefix"] + roles["system"]["suffix"]))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        valid = False
+    if not valid:
+        raise RuntimeError("Engine lacks a valid processed chat template; rebuild the Cosmos3-Edge "
+                           "LLM and vision engines with TensorRT-Edge-LLM v0.10.0.")
+    print(f"[shim] engine = {os.path.realpath(ENGINE_DIR)}", flush=True)
     t0 = time.time()
-    _runtime = rt.LLMRuntime(ENGINE_DIR, ENGINE_DIR, {}, checkpoint_dir, rt.ContextCacheConfig())
+    _runtime = rt.LLMRuntime(ENGINE_DIR, ENGINE_DIR, {})
     print(f"[shim] LLMRuntime constructed in {time.time()-t0:.2f}s", flush=True)
     t0 = time.time()
     _runtime.capture_decoding_cuda_graph()
@@ -128,6 +109,10 @@ def _build_request(messages, max_tokens, temperature, top_p, top_k=50):
     """Translate OpenAI-style messages into an LLMGenerationRequest."""
     images = []
     rt_messages = []
+    # The model expects one leading system block, even when it is empty.
+    # Export validation removes the SDK's copy from every user-message prefix.
+    if not messages or messages[0].get("role") != "system":
+        rt_messages.append(rt.Message("system", [rt.MessageContent("text", "")]))
     for msg in messages:
         role = msg.get("role", "user")
         content = msg.get("content")
@@ -160,7 +145,7 @@ def _build_request(messages, max_tokens, temperature, top_p, top_k=50):
     req.temperature = float(temperature)
     req.top_p = float(top_p)
     req.top_k = int(top_k)
-    # Render the checkpoint's own Jinja in v0.11.0. Keep the live-caption path
+    # Use the processed model template. Keep the live-caption path
     # concise; do not inherit future runtime changes to these request defaults.
     req.apply_chat_template = True
     req.add_generation_prompt = True

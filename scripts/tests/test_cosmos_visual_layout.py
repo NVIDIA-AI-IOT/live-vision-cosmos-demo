@@ -22,21 +22,15 @@ SOURCE = '''# Original fixture notice must remain intact.
 ``fast_pos_embed_idx`` is another fixture description.
 """
 
-def _adapt_patch_embedding_weight_for_chw_input(weight, patch_size, num_channels):
-    return ("fixture permutation", weight)
-
 def untouched(value):
     return value
 
 def load_cosmos3_reasoner_visual_weights(model, weights):
     def _remap(key):
         return key
-    def _transform(remapped_key, tensor):
-        return _adapt_patch_embedding_weight_for_chw_input(tensor, 1, 3)
     load_submodule_weights(model,
                            weights,
                            _remap,
-                           transform=_transform,
                            label="fixture")
     return weights
 '''
@@ -69,21 +63,38 @@ class CosmosVisualLayoutFix(unittest.TestCase):
         self.assertEqual(self.module.stat().st_mode & 0o777, 0o640)
         self.assertTrue(self.patched.startswith(SOURCE.split('"""')[0]))
         self.assertEqual(layout.apply_fix(self.sdk), "already corrected")
-        self.assertEqual(list(self.module.parent.glob(".cosmos-hwc-*")), [])
+        self.assertEqual(list(self.module.parent.glob(".cosmos-layout-*")), [])
 
-    def test_loader_passes_original_weight_objects_without_transform(self):
+    def test_loader_reorders_only_patch_weights_and_keeps_original_mapping(self):
+        import numpy as np
+        class Tensor:
+            def __init__(self, values):
+                self.values = np.asarray(values)
+                self.shape, self.ndim = self.values.shape, self.values.ndim
+            def reshape(self, *shape): return Tensor(self.values.reshape(*shape))
+            def permute(self, *order): return Tensor(self.values.transpose(*order))
+            def contiguous(self): return self
+            def reshape_as(self, other): return self.reshape(*other.shape)
         observed = {}
         def load_weights(model, weights, remap, **kwargs):
-            observed.update(weights=weights, kwargs=kwargs, key=remap("fixture.weight"))
+            observed.update(weights=weights, kwargs=kwargs)
         namespace = {"load_submodule_weights": load_weights}
         exec(self.patched, namespace)
-        weights = {"fixture.weight": object()}
-        self.assertIs(namespace["load_cosmos3_reasoner_visual_weights"](None, weights), weights)
-        self.assertIs(observed["weights"], weights)
-        self.assertNotIn("transform", observed["kwargs"])
+        key = "model.visual.embeddings.patch_embedding.weight"
+        original = Tensor(np.arange(24).reshape(2, 12))
+        bias = object()
+        weights = {key: original, "bias": bias}
+        model = type("Model", (), {"patch_size": 2})()
+        namespace["load_cosmos3_reasoner_visual_weights"](model, weights)
+        converted = observed["weights"][key].values
+        expected = original.values.reshape(2, 2, 2, 3).transpose(0, 3, 1, 2).reshape(2, 12)
+        np.testing.assert_array_equal(converted, expected)
+        hwc = np.arange(12)
+        chw = hwc.reshape(2, 2, 3).transpose(2, 0, 1).reshape(12)
+        np.testing.assert_array_equal(converted @ chw, original.values @ hwc)
+        self.assertIs(weights[key], original)
+        self.assertIs(observed["weights"]["bias"], bias)
         self.assertEqual(observed["kwargs"]["label"], "fixture")
-        self.assertIs(namespace["untouched"](weights), weights)
-        self.assertIn("HWC (channel-last)", namespace["__doc__"])
 
     def test_check_mode_does_not_write(self):
         self.assertEqual(layout.apply_fix(self.sdk, check=True), "correction required")

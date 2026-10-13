@@ -4,9 +4,9 @@
 repository root unless stated otherwise. This is the automated source-build path;
 for fixed-engine container preparation, see [the runtime guide](../container/README.md).
 
-This demo builds the [NVIDIA TensorRT-Edge-LLM v0.11.0 SDK](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/95515c2f87fba8982db5a519f9022277667b3cc9)
-(software development kit) from source. Engines from earlier SDK versions must
-be re-exported and rebuilt. See [SDK compatibility](edgellm-0.11-upgrade.md) for
+This demo builds the [NVIDIA TensorRT-Edge-LLM v0.10.0 SDK](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/71dd1bae032e70771265917ec74d3ff4cad07a10)
+(software development kit) from source. Engines from different SDK versions must
+be re-exported and rebuilt. See [SDK compatibility](edgellm-compatibility.md) for
 the pinned configuration and visual-export correction.
 
 A minimal, low-RAM camera/VLM web UI that runs a locally-hosted **NVIDIA Cosmos3-Edge** model on a
@@ -196,9 +196,9 @@ the SDK build and the checkpoint download are skipped.
 
 | Requirement | Why |
 |---|---|
-| **Linux** (not macOS, at any RAM size) | NVIDIA's `cuda-bindings` package - a *base* dependency of `tensorrt-edgellm`, pulled in even just to export a checkpoint - ships `manylinux` and Windows wheels only. There is no macOS build at any Python version. A MacBook Pro or a Mac Studio with 128 GB of RAM cannot run this step; it is excluded on OS grounds, not resources. Windows users: use WSL. |
+| **Linux** (not macOS, at any RAM size) | The export toolchain includes NVIDIA's `cuda-bindings` package, which ships `manylinux` and Windows wheels only. There is no macOS build at any Python version. A MacBook Pro or a Mac Studio with 128 GB of RAM cannot run this step; it is excluded on OS grounds, not resources. Windows users: use WSL. |
 | **≥ 12 GiB available RAM** (`MemAvailable`; `HOST_QUANTIZE_MIN_RAM_GB` in `bootstrap.sh`) | The configured host preflight minimum. Hosts below it fall back to the on-Orin V1 export. Revalidate memory use for the final artifacts. |
-| **`python3`, `git` and `rsync`** on the host | `git` clones TensorRT-Edge-LLM at the pinned commit, `python3` gets a local venv with its `export` extra for the quantize and export, and `rsync` copies the export to the Orin. |
+| **`python3`, `git` and `rsync`** on the host | `git` clones TensorRT-Edge-LLM at the pinned commit, `python3` gets a local venv with its `tools` extra for the quantize and export, and `rsync` copies the export to the Orin. |
 
 If any check fails, `bootstrap.sh` prints which one, then **falls back to the standard on-Orin
 path automatically** - it does not abort the whole setup. A failure later in the host-side step
@@ -238,33 +238,26 @@ it's what the automation runs, spelled out.
 Everything in this step lives inside this repo's checkout at `/opt/live-vision-cosmos-demo`, so
 make that first - the `mkdir`/`chown` and `git clone` lines of step 2 - and run the commands
 below from there. Clone [NVIDIA/TensorRT-Edge-LLM](https://github.com/NVIDIA/TensorRT-Edge-LLM)
-at commit `95515c2f87fba8982db5a519f9022277667b3cc9` (tag `v0.11.0`), with its submodules, into
+at commit `71dd1bae032e70771265917ec74d3ff4cad07a10` (tag `v0.10.0`), with its submodules, into
 `/opt/live-vision-cosmos-demo/external/TensorRT-Edge-LLM`, give it a Python venv at `.venv`
 inside that directory, and build its native runtime per its own instructions
 (`kernelSrcs/build_cutedsl.py` for the `fmha` and `int4_fp16_gemm` kernel groups, then a CMake
 configure/build for the `_edgellm_runtime`, `NvInfer_edgellm_plugin`, `llm_build`, and
 `visual_build` targets), then pip-install the SDK itself into that venv, editable, with its
-`export,tools` extras. Install `fastapi==0.139.2` and `uvicorn==0.51.0` explicitly for
+`tools` extra. Install `fastapi==0.139.2` and `uvicorn==0.51.0` explicitly for
 the shim; this demo does not use the SDK's generic video server or its PyAV dependency.
-The `sdk_python_dependencies` stage provides `.venv/bin/tensorrt-edgellm-export` and
-migrates earlier installs by uninstalling only a verified venv-local PyAV wheel.
-It stops if inherited PyAV or leftover `av.libs` remain, without changing system packages.
-The dependency migration preserves current SDK native-build and engine markers. Setup
-checks for PyAV again on every full run, including when that stage is already complete.
-It pauses inference while updating the venv, then restarts and checks the services after
-successful setup; a failed migration leaves inference stopped until setup succeeds.
-An otherwise completed installation needs 12 GiB free for this migration, returning to
-the usual 8 GiB maintenance allowance afterward.
-Removing the SDK video extra has not yet been validated through a full Orin export;
-repeat both reasoning exports and known-image inference before accepting a fresh build.
+The `sdk_python_dependencies` stage provides `.venv/bin/tensorrt-edgellm-export`.
+The native shim environment must not expose PyAV or bundled `av.libs`; setup checks
+this before and after dependency installation and on each full run. Prepare the
+optional Reachy media environment separately. Validate both reasoning exports and
+known-image inference on the Orin before accepting a fresh build.
 The build needs the pinned CUDA 13.2 / TensorRT 10.16 packages first -
 `sudo bash scripts/install-jetpack-compute.sh` (the `jetpack_compute` stage) - plus the apt
 packages in `do_system_packages`. See `scripts/setup-orin.sh`'s `do_fetch_edgellm`,
 `do_edgellm_venv`, `do_build_edgellm_runtime` and `do_install_edgellm_python` for the exact
 commands and environment this repo builds against. The shim unit's `ExecStart` (the venv's python) and the shim's
 `EDGELLM_ROOT` default (where it finds the SDK's `build/` outputs) both expect that location;
-with the SDK anywhere else, edit `ExecStart` and set `EDGELLM_ROOT` for the shim - and
-`SHARED_CHECKPOINT_DIR`, whose default is relative to it. Then:
+with the SDK anywhere else, edit `ExecStart` and set `EDGELLM_ROOT` for the shim. Then:
 
 1. **Download `nvidia/Cosmos3-Edge` at revision `344d602b128d1bbdacb43b08d0a3626f46343e29`**
    from Hugging Face into `checkpoints/Cosmos3-Edge/raw` (see NOTICE.md - the model is under the
@@ -331,8 +324,7 @@ with the SDK anywhere else, edit `ExecStart` and set `EDGELLM_ROOT` for the shim
    against `repack_gptq_to_plugin`'s exact unpacking math in
    `tensorrt_edgellm/checkpoint/repacking.py`); only the metadata was undiscoverable.
 4. **Export the LLM with `--int4-gemm-plugin-version 1`, not the default 2**, into
-   `checkpoints/Cosmos3-Edge/onnx/reasoning` - the shim also reads the `llm/` directory this
-   writes there, at runtime (`SHARED_CHECKPOINT_DIR`):
+   `checkpoints/Cosmos3-Edge/onnx/reasoning`:
 
    ```
    external/TensorRT-Edge-LLM/.venv/bin/tensorrt-edgellm-export checkpoints/Cosmos3-Edge/quantized \
@@ -358,21 +350,24 @@ with the SDK anywhere else, edit `ExecStart` and set `EDGELLM_ROOT` for the shim
    ```
 
    The revision- and digest-guarded repair aligns the pinned exporter with the native
-   runner's HWC patch layout. It rejects unexpected SDK source; do not bypass it.
+   runner's CHW patch layout. It rejects unexpected SDK source; do not bypass it.
 
    A vision engine built against a *different* checkpoint's externalized/refit weights will not
    load (`missing tensor model.projector.linear_fc1.bias`) - always build both from the same
    source.
-6. **Validate the provider's `chat_template.jinja` after export.** Version 0.11 renders
-   the original template in C++ and no longer supports `processed_chat_template.json`.
-   `do_validate_chat_template` requires the exported template to match the pinned
-   checkpoint byte-for-byte and rejects stale template artifacts. Do not apply the old
-   JSON `content_types` repair or copy a template from another model.
+6. **Validate the processed chat template after export.** The SDK uses
+   `processed_chat_template.json`. Run the installer's validation step to check
+   roles/generation text, normalize the leading empty system block, and populate
+   missing image/video formats from the pinned model's original Jinja. It rejects
+   conflicting formats rather than replacing them:
 
    ```bash
-   cmp checkpoints/Cosmos3-Edge/raw/chat_template.jinja \
-     checkpoints/Cosmos3-Edge/onnx/reasoning/llm/chat_template.jinja
+   bash -c 'source scripts/setup-orin.sh; do_validate_chat_template'
    ```
+
+   The native builder copies this validated JSON into the engine directory. Use
+   full-weight engines; this SDK's Python binding does not accept a separate
+   checkpoint directory for weight-stripped/refit engines.
 7. **Build the engines** as `do_build_engine` does: the SDK build's own binaries, with
    `EDGELLM_PLUGIN_PATH` set and a temporary swapfile on. Without `EDGELLM_PLUGIN_PATH`, both
    binaries look for the plugin at the relative path `build/libNvInfer_edgellm_plugin.so` and

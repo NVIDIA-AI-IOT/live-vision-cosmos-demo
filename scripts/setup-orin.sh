@@ -26,8 +26,8 @@ set -euo pipefail
 # Rebuild and validate engines when changing these revisions.
 # ---------------------------------------------------------------------------------------
 INSTALL_DIR="/opt/live-vision-cosmos-demo"
-EDGELLM_COMMIT="95515c2f87fba8982db5a519f9022277667b3cc9"   # tag v0.11.0
-COSMOS_VISUAL_LAYOUT_SHA256="a5804ab79e6210972c6be3ef2c98beee663da0bf0661510d42219d6e109531ed"
+EDGELLM_COMMIT="71dd1bae032e70771265917ec74d3ff4cad07a10"   # tag v0.10.0
+COSMOS_VISUAL_LAYOUT_SHA256="cf64ded55bd39cd8a1910b47340f5bab47207f12131a8f362525212e5fd55917"
 SDK_PYTHON_DEPENDENCIES_REVISION="native-shim-v1"
 SDK_PYTHON_CHECK="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/check-sdk-python.py"
 COSMOS_MODEL_REPO="nvidia/Cosmos3-Edge"
@@ -66,8 +66,7 @@ warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31mFATAL\033[0m %s\n' "$*" >&2; exit 1; }
 
 stage_revision() {
-  # Old releases wrote empty markers. Never let them reuse a v0.10.1 runtime,
-  # export or serialized engine with the v0.11.0 source and Jinja contract.
+  # SDK-specific markers prevent reusing incompatible native artifacts.
   # Copy the matching demo sources too, including when invoked from another checkout.
   case "$1" in
     sdk_python_dependencies)
@@ -127,7 +126,7 @@ completed_build_artifacts_present() {
       "$EDGELLM_DIR/build/libNvInfer_edgellm_plugin.so" \
       "$ONNX_DIR/llm/model.onnx" "$ONNX_DIR/visual/model.onnx" \
       "$ENGINE_DIR/llm.engine" "$ENGINE_DIR/visual/visual.engine" \
-      "$ENGINE_DIR/chat_template.jinja"; do
+      "$ENGINE_DIR/processed_chat_template.json"; do
     [[ -s "$artifact" ]] || return 1
   done
 }
@@ -178,10 +177,11 @@ def tensors(message):
 
 try:
     raw, exports = map(Path, sys.argv[1:])
-    provider = (raw / "chat_template.jinja").read_bytes()
-    assert provider.strip() and (exports / "llm/chat_template.jinja").read_bytes() == provider
-    for conflict in ("processed_chat_template.json", "chat_template.model", "additional_chat_templates"):
-        assert not (exports / "llm" / conflict).exists()
+    template = json.loads((exports / "llm/processed_chat_template.json").read_text())
+    assert template["content_types"]["image"]["format"] == "<|vision_start|><|image_pad|><|vision_end|>"
+    assert template["generation_prompt"]
+    assert all(template["roles"][role]["prefix"] and template["roles"][role]["suffix"]
+               for role in ("system", "user", "assistant"))
     for tower in ("llm", "visual"):
         directory = (exports / tower).resolve(strict=True)
         config = json.loads((directory / "config.json").read_text())
@@ -223,7 +223,7 @@ visual_layout_repair_inputs_present() {
        && "$(cat "$STATE_DIR/export_onnx_visual")" == "$EDGELLM_COMMIT" ]] || return 1
   fi
   [[ -s "$ENGINE_DIR/llm.engine" ]] || return 1
-  cmp -s "$RAW_DIR/chat_template.jinja" "$ENGINE_DIR/chat_template.jinja" || return 1
+  cmp -s "$ONNX_DIR/llm/processed_chat_template.json" "$ENGINE_DIR/processed_chat_template.json" || return 1
   engine_export_metadata_present
 }
 
@@ -238,7 +238,7 @@ minimum_free_space_gib() {
     fi
   elif engine_build_inputs_present || visual_layout_repair_inputs_present; then
     # Provisional remaining-work allowance: 4 GiB build swap, serialized engines
-    # and margin. This is not a measured v0.11 peak-disk-usage claim.
+    # and margin. Allow space for serialization and temporary build files.
     printf '12\n'
   else
     printf '25\n'
@@ -396,7 +396,7 @@ do_edgellm_venv() {
   sudo -u "$SERVICE_USER" python3 -m venv --system-site-packages "$EDGELLM_DIR/.venv"
   sudo -u "$SERVICE_USER" env PATH="$cuda_bin:$PATH" "$EDGELLM_PY" -m pip install --upgrade pip
   sudo -u "$SERVICE_USER" env PATH="$cuda_bin:$PATH" "$EDGELLM_PY" -m pip install \
-    'pybind11==3.0.4' 'nvidia-cutlass-dsl[cu13]==4.7.0' 'cupy-cuda13x==13.6.0' 'cuda-python>=12.6,<14'
+    'pybind11==3.0.4' 'nvidia-cutlass-dsl[cu13]==4.6.1' 'cupy-cuda13x==13.6.0' 'cuda-python>=12.6,<14'
   echo "$cuda_ver" > "$STATE_DIR/.cuda-version"
 }
 
@@ -463,9 +463,9 @@ do_install_edgellm_python() {
   # soundfile/etc included) avoids further one-at-a-time whack-a-mole - confirmed as the actual
   # requirement, not a guess, by running the real visual export end to end with it installed.
   # The shim uses the native binding, not the SDK's generic video server. Keep
-  # export/tools for model preparation and install its two HTTP dependencies explicitly.
+  # base/tools for model preparation and install its two HTTP dependencies explicitly.
   sudo -u "$SERVICE_USER" env "${envs[@]}" "$EDGELLM_PY" -m pip install \
-    -e "$EDGELLM_DIR[export,tools]" 'fastapi==0.139.2' 'uvicorn==0.51.0'
+    -e "$EDGELLM_DIR[tools]" 'fastapi==0.139.2' 'uvicorn==0.51.0'
   do_check_edgellm_python
   # JetPack's system SciPy/CFFI/pandas don't satisfy the tools extras' pins under
   # --system-site-packages (measured); shadow them inside the venv only. pandas specifically:
@@ -648,7 +648,7 @@ adopt_host_export() {
     return 0
   fi
   [[ -f "$staged/.edgellm-commit" && "$(cat "$staged/.edgellm-commit")" == "$EDGELLM_COMMIT" ]] \
-    || die "Host export SDK does not match $EDGELLM_COMMIT. Re-run --host-quantize with this checkout; do not mix v0.10.1 exports and v0.11.0 runtime."
+    || die "Host export SDK does not match $EDGELLM_COMMIT. Re-run --host-quantize with this checkout; do not mix exports and runtimes from different SDK revisions."
   log "adopting the LLM export --host-quantize made on the laptop (V2/cuteDSL plugin)"
   rm -f "$staged/.complete"
   rm -rf "${ONNX_DIR:?}/llm"
@@ -667,7 +667,7 @@ do_export_onnx_llm() {
   # that hits the OOM below.
   sudo -u "$SERVICE_USER" mkdir -p "$ONNX_DIR"
   local llm_export="$EDGELLM_DIR/.venv/bin/tensorrt-edgellm-export"
-  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the sdk_python_dependencies stage should have installed it via pip install -e '.[export,tools]'."
+  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the sdk_python_dependencies stage should have installed it via pip install -e '.[tools]'."
   # V1 (legacy AWQ-swizzled) plugin, not the default V2: exporting with V2 (cuteDSL
   # fragment-layout) on THIS box gets OOM-killed by the kernel partway through the export
   # itself, on an 8 GB Orin Nano - even idle, with every demo service stopped: measured
@@ -693,9 +693,8 @@ do_export_onnx_visual() {
   rm -f "$STATE_DIR"/{build_visual_layout,enable_services,smoke_test}
   sudo -u "$SERVICE_USER" mkdir -p "$ONNX_DIR"
   local llm_export="$EDGELLM_DIR/.venv/bin/tensorrt-edgellm-export"
-  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the sdk_python_dependencies stage should have installed it via pip install -e '.[export,tools]'."
-  # The pinned native Cosmos runner supplies HWC patches. Remove the stale
-  # exporter-only CHW permutation before loading checkpoint weights.
+  [[ -x "$llm_export" ]] || die "tensorrt-edgellm-export not found in the venv - the sdk_python_dependencies stage should have installed it via pip install -e '.[tools]'."
+  # Adapt the checkpoint HWC columns to the pinned native CHW patch layout.
   sudo -u "$SERVICE_USER" "$EDGELLM_PY" \
     "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fix_cosmos_visual_layout.py" "$EDGELLM_DIR"
   sudo -u "$SERVICE_USER" "$llm_export" "$RAW_DIR" "$ONNX_DIR" \
@@ -703,24 +702,40 @@ do_export_onnx_visual() {
 }
 
 do_validate_chat_template() {
-  # v0.11.0 copies the provider's Jinja verbatim and renders it in native Inja.
-  # The old processed_chat_template.json patch is no longer supported. Refuse
-  # missing, stale or rewritten templates instead of synthesizing delimiters.
-  "$EDGELLM_PY" - "$RAW_DIR" "$ONNX_DIR/llm" <<'PY'
-import sys
+  # The SDK extracts a JSON template; ensure the model's multimodal markers
+  # survive extraction. Normalize the empty system block that this SDK bakes
+  # into each user prefix; the shim supplies it once at the start instead.
+  "$EDGELLM_PY" - "$RAW_DIR" "$ONNX_DIR/llm" <<'PY_TEMPLATE'
+import json, sys
 from pathlib import Path
 source, exported = map(Path, sys.argv[1:])
 provider = source / "chat_template.jinja"
-template = exported / "chat_template.jinja"
+template = exported / "processed_chat_template.json"
 if not provider.is_file() or not template.is_file():
-    sys.exit("Missing Cosmos provider Jinja; re-download the pinned checkpoint and re-export with v0.11.0.")
-if not provider.read_bytes().strip() or template.read_bytes() != provider.read_bytes():
-    sys.exit("Exported Jinja must match the pinned provider template byte-for-byte.")
-for name in ("processed_chat_template.json", "chat_template.model", "additional_chat_templates"):
-    if (exported / name).exists():
-        sys.exit(f"Stale/conflicting {name}; use a clean v0.11.0 export.")
-print(f"Validated provider template: {template}")
-PY
+    sys.exit("Missing Cosmos provider or processed chat template; re-export with the pinned SDK.")
+original = provider.read_text()
+data = json.loads(template.read_text())
+roles = data.get("roles", {})
+if any(not roles.get(role, {}).get("prefix") or not roles.get(role, {}).get("suffix")
+       for role in ("system", "user", "assistant")) or not data.get("generation_prompt"):
+    sys.exit("Incomplete processed chat template; refusing a fallback export.")
+empty_system = roles["system"]["prefix"] + roles["system"]["suffix"]
+if roles["user"]["prefix"].startswith(empty_system):
+    roles["user"]["prefix"] = roles["user"]["prefix"][len(empty_system):]
+    if not roles["user"]["prefix"]:
+        sys.exit("Missing user prefix after removing the empty system block.")
+formats = {"image": "<|vision_start|><|image_pad|><|vision_end|>",
+           "video": "<|vision_start|><|video_pad|><|vision_end|>"}
+content = data.setdefault("content_types", {})
+for kind, marker in formats.items():
+    if marker not in original:
+        sys.exit(f"Pinned provider template does not contain {kind} markers.")
+    if kind in content and content[kind] != {"format": marker}:
+        sys.exit(f"Conflicting {kind} format in processed template; re-export.")
+    content[kind] = {"format": marker}
+template.write_text(json.dumps(data, indent=2) + "\n")
+print(f"Validated processed template: {template}")
+PY_TEMPLATE
 }
 
 BUILD_SWAPFILE="$INSTALL_DIR/data/build-swap.img"
@@ -857,8 +872,8 @@ do_build_engine() {
     --maxInputLen 1024 --maxKVCacheCapacity 1024 --maxKVPoolPages 8 --maxBatchSize 1
   build_visual_engine_files
   [[ -f "$ENGINE_DIR/llm.engine" ]] || die "llm_build ran but $ENGINE_DIR/llm.engine is missing."
-  cmp -s "$RAW_DIR/chat_template.jinja" "$ENGINE_DIR/chat_template.jinja" \
-    || die "The engine is missing the matching provider Jinja template. Do not start this engine."
+  cmp -s "$ONNX_DIR/llm/processed_chat_template.json" "$ENGINE_DIR/processed_chat_template.json" \
+    || die "The engine is missing the matching processed chat template. Do not start this engine."
   disable_build_swap || die "Build finished but swap cleanup failed. Resolve the warning above before starting services."
   stage_mark build_visual_layout
 }

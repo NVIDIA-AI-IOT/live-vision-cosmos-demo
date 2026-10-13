@@ -26,6 +26,13 @@ def fixture(root):
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text('{}' if path.suffix == '.json' else 'synthetic test bytes')
+    template = json.dumps({
+        "roles": {role: {"prefix": role, "suffix": "end"} for role in ("system", "user", "assistant")},
+        "generation_prompt": "assistant",
+        "content_types": {"image": {"format": "<|vision_start|><|image_pad|><|vision_end|>"}},
+    })
+    for name in ('engines/reasoning/processed_chat_template.json', 'model/processed_chat_template.json'):
+        (root / name).write_text(template)
     manifest = json.loads(bundle.SPEC.read_text())
     (root / 'engines/reasoning/config.json').write_text(json.dumps({'builder_config': manifest['engine_config']}))
     manifest.update(candidate_commit='a' * 40, int4_plugin_version=1, files=bundle.inventory(root))
@@ -74,7 +81,7 @@ class BundleTests(unittest.TestCase):
     def test_incompatible_identity(self):
         path = self.root / 'manifest.json'
         good = json.loads(path.read_text())
-        for key in ('schema_version', 'model', 'target', 'sdk_commit', 'source_commit', 'int4_plugin_version', 'export_compatibility'):
+        for key in ('schema_version', 'model', 'target', 'sdk_commit', 'int4_plugin_version', 'export_compatibility'):
             with self.subTest(key=key):
                 bad = dict(good)
                 bad[key] = True if key == 'int4_plugin_version' else 'wrong'
@@ -89,13 +96,13 @@ class BundleTests(unittest.TestCase):
         path.write_text(json.dumps(manifest))
 
     def test_missing_provider_template_rejected(self):
-        (self.root / 'engines/reasoning/chat_template.jinja').unlink()
+        (self.root / 'engines/reasoning/processed_chat_template.json').unlink()
         self.refresh_checksums()
         with self.assertRaisesRegex(ValueError, 'lacks required'):
             bundle.verify(self.root)
 
     def test_incomplete_native_runtime_artifacts_rejected(self):
-        # SDK 0.11 loads these from the engine tree, not the separate checkpoint.
+        # The SDK loads these from the engine tree, not the separate checkpoint.
         for name in ('embedding.safetensors', 'tokenizer.json', 'tokenizer_config.json',
                      'visual/preprocessor_config.json'):
             with self.subTest(name=name):
@@ -110,21 +117,17 @@ class BundleTests(unittest.TestCase):
     def test_modified_or_empty_provider_template_rejected(self):
         for text in ('', 'different template'):
             with self.subTest(text=text):
-                (self.root / 'engines/reasoning/chat_template.jinja').write_text(text)
+                (self.root / 'engines/reasoning/processed_chat_template.json').write_text(text)
                 self.refresh_checksums()
                 with self.assertRaises(ValueError):
                     bundle.verify(self.root)
 
-    def test_legacy_templates_rejected_with_valid_checksums(self):
-        for directory in ('engines/reasoning', 'model'):
-            for name in ('processed_chat_template.json', 'chat_template.model', 'additional_chat_templates'):
-                with self.subTest(directory=directory, name=name):
-                    path = self.root / directory / name
-                    path.write_text('legacy template')
-                    self.refresh_checksums()
-                    with self.assertRaisesRegex(ValueError, 'Legacy chat template'):
-                        bundle.verify(self.root)
-                    path.unlink()
+    def test_incomplete_processed_template_rejected_with_valid_checksums(self):
+        for name in ('engines/reasoning/processed_chat_template.json', 'model/processed_chat_template.json'):
+            (self.root / name).write_text('{}')
+        self.refresh_checksums()
+        with self.assertRaisesRegex(ValueError, 'Incomplete processed'):
+            bundle.verify(self.root)
 
     def test_old_flat_visual_layout_rejected(self):
         (self.root / 'engines/reasoning/visual/visual.engine').rename(

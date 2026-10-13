@@ -29,7 +29,7 @@ Do not guess credentials, probe old addresses, or change another device's SSH ke
 
 ## Build configuration
 
-- [NVIDIA TensorRT-Edge-LLM SDK v0.11.0](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/95515c2f87fba8982db5a519f9022277667b3cc9): `95515c2f87fba8982db5a519f9022277667b3cc9`.
+- [NVIDIA TensorRT-Edge-LLM SDK v0.10.0](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/71dd1bae032e70771265917ec74d3ff4cad07a10): `71dd1bae032e70771265917ec74d3ff4cad07a10`.
 - [Cosmos3-Edge](https://huggingface.co/nvidia/Cosmos3-Edge/tree/344d602b128d1bbdacb43b08d0a3626f46343e29): `344d602b128d1bbdacb43b08d0a3626f46343e29`, OpenMDW 1.1. This revision needs no Hugging Face token.
 - CUDA 13.2 and TensorRT 10.16.2.10; exact compatibility is in [runtime-spec.json](container/runtime-spec.json).
 - On-device INT4 export uses plugin V1. The optional `--host-quantize` path needs
@@ -40,7 +40,7 @@ Do not guess credentials, probe old addresses, or change another device's SSH ke
   does not quantize this dense model. Store GPTQ-compatible metadata inside
   `config.json`; do not create an `hf_quant_config.json` sidecar.
 - Preserve `scripts/fix_cosmos_visual_layout.py`: the selected SDK exporter needs
-  its guarded HWC weight-layout correction. A model or SDK change requires fresh
+  its guarded HWC-to-CHW weight-layout correction. A model or SDK change requires fresh
   export/build and image-caption checks. Do not reuse engines across SDK versions.
 
 ## Runtime changes

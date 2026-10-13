@@ -19,7 +19,7 @@ git -c credential.helper= -C "$EDGELLM_ROOT" fetch --depth 1 origin "$SDK_COMMIT
 git -C "$EDGELLM_ROOT" checkout --detach FETCH_HEAD
 git -c credential.helper= -C "$EDGELLM_ROOT" submodule update --init --recursive
 python3 -m venv --system-site-packages "$EDGELLM_ROOT/.venv"
-python -m pip install --no-cache-dir 'pybind11==3.0.4' 'nvidia-cutlass-dsl[cu13]==4.7.0' \
+python -m pip install --no-cache-dir 'pybind11==3.0.4' 'nvidia-cutlass-dsl[cu13]==4.6.1' \
   'cupy-cuda13x==13.6.0' 'cuda-python>=12.6,<14'
 export TRT_PACKAGE_DIR=/usr CUDA_PATH=/usr/local/cuda-13.2
 python "$EDGELLM_ROOT/kernelSrcs/build_cutedsl.py" --gpu_arch sm_87 --arch aarch64 \

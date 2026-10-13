@@ -112,18 +112,18 @@ python3 container/build-image.py \
 export COSMOS_IMAGE="$(cat "$COSMOS_ARTIFACTS/runtime-image.id")"
 ```
 
-The image builds the [NVIDIA TensorRT-Edge-LLM v0.11.0](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/95515c2f87fba8982db5a519f9022277667b3cc9) software development kit (SDK), pinned to commit
-`95515c2f87fba8982db5a519f9022277667b3cc9`, with native SM87 FMHA and INT4 kernels,
+The image builds the [NVIDIA TensorRT-Edge-LLM v0.10.0](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/71dd1bae032e70771265917ec74d3ff4cad07a10) software development kit (SDK), pinned to commit
+`71dd1bae032e70771265917ec74d3ff4cad07a10`, with native SM87 FMHA and INT4 kernels,
 and retains its source, submodules, license files, base-image reference and
 resolved Python/Debian package lists. Preserve those materials when redistributing
 an image; NVIDIA runtime and third-party components retain their own terms.
 
 Build the engine through the advanced source path, using the pinned model revision and
-the same SDK/runtime. SDK 0.11 requires a fresh LLM and visual export/build; do not
-reuse a 0.10.1 engine. Apply the source installer's guarded HWC visual repair. The bundle
+the same SDK/runtime. Changing SDK versions requires a fresh LLM and visual export/build; do not
+reuse an engine from another SDK. Apply the source installer's guarded HWC-to-CHW visual repair. The bundle
 requires `visual/visual.engine`, `visual/config.json`, `visual/preprocessor_config.json`,
-the engine's `embedding.safetensors`, tokenizer files, and matching nonempty provider
-`chat_template.jinja` files in the engine and exported checkpoint. Legacy JSON/model
+the engine's `embedding.safetensors`, tokenizer files, and matching validated
+`processed_chat_template.json` files in the engine and exported checkpoint. Incomplete
 templates are rejected. The manifest records the expected visual source correction. Keep the completed
 engine and its exported checkpoint together.
 Prepare a separate notices directory containing `LICENSE.OpenMDW` copied from the

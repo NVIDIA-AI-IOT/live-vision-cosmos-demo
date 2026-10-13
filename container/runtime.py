@@ -83,7 +83,6 @@ def main():
         raise ValueError("Mount cert.pem and key.pem read-only at /tls")
     os.environ.update({
         "ENGINE_DIR": str(bundle / "engines/reasoning"),
-        "SHARED_CHECKPOINT_DIR": str(bundle / "model"),
         "PORT": "8001",
     })
     # Invoke uvicorn directly to keep the shim on loopback without changing its source API.

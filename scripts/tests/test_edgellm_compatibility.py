@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Offline migration checks; they do not build or validate an Orin engine."""
+"""Offline SDK compatibility checks; they do not build or validate an Orin engine."""
 import importlib.util
 import json
 import os
@@ -13,7 +13,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
-SDK_COMMIT = "95515c2f87fba8982db5a519f9022277667b3cc9"
+SDK_COMMIT = "71dd1bae032e70771265917ec74d3ff4cad07a10"
 
 
 class SetupMigrationTests(unittest.TestCase):
@@ -63,29 +63,32 @@ if stage_done build_engine; then exit 23; fi
             'RAW_DIR="$1"; ONNX_DIR="$2"; EDGELLM_PY="$3"; do_validate_chat_template',
             raw, onnx, sys.executable)
 
-    def test_export_must_preserve_nonempty_provider_template(self):
+    def test_processed_template_preserves_roles_and_rejects_conflicting_markers(self):
         with tempfile.TemporaryDirectory() as directory:
             raw = Path(directory) / "raw"
             onnx = Path(directory) / "onnx"
             raw.mkdir()
             (onnx / "llm").mkdir(parents=True)
-            template = b"{{ messages[0].content }}\r\n"
-            (raw / "chat_template.jinja").write_bytes(template)
-            exported = onnx / "llm/chat_template.jinja"
-            exported.write_bytes(template)
+            marker = "<|vision_start|><|image_pad|><|vision_end|>"
+            (raw / "chat_template.jinja").write_text(marker + "<|vision_start|><|video_pad|><|vision_end|>")
+            exported = onnx / "llm/processed_chat_template.json"
+            roles = {role: {"prefix": f"<|im_start|>{role}\n", "suffix": "<|im_end|>\n"}
+                     for role in ("system", "user", "assistant")}
+            roles["user"]["prefix"] = roles["system"]["prefix"] + roles["system"]["suffix"] + roles["user"]["prefix"]
+            data = {"roles": roles,
+                    "generation_prompt": "assistant", "content_types": {}}
+            exported.write_text(json.dumps(data))
             result = self.template_check(raw, onnx)
             self.assertEqual(result.returncode, 0, result.stderr)
-            exported.write_bytes(template.replace(b"\r\n", b"\n"))
-            result = self.template_check(raw, onnx)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("byte-for-byte", result.stderr)
-            exported.write_bytes(template)
-            legacy = onnx / "llm/processed_chat_template.json"
-            legacy.write_text('{"content_types": {}}')
-            result = self.template_check(raw, onnx)
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Stale/conflicting", result.stderr)
-            legacy.unlink()
+            checked = json.loads(exported.read_text())
+            self.assertEqual(checked["roles"]["system"], data["roles"]["system"])
+            self.assertEqual(checked["roles"]["assistant"], data["roles"]["assistant"])
+            self.assertEqual(checked["roles"]["user"]["prefix"], "<|im_start|>user\n")
+            self.assertEqual(checked["generation_prompt"], data["generation_prompt"])
+            self.assertEqual(checked["content_types"]["image"]["format"], marker)
+            checked["content_types"]["image"]["format"] = "wrong"
+            exported.write_text(json.dumps(checked))
+            self.assertIn("Conflicting image", self.template_check(raw, onnx).stderr)
             exported.unlink()
             self.assertNotEqual(self.template_check(raw, onnx).returncode, 0)
 
@@ -133,7 +136,7 @@ class FakeRequest:
 
 
 class FakeGenerationRequest:
-    # Keep these names in sync with the audited v0.11.0 pybind request surface.
+    # Keep these names in sync with the audited v0.10.0 pybind request surface.
     __slots__ = ("requests", "max_generate_length", "temperature", "top_p", "top_k",
                  "apply_chat_template", "add_generation_prompt", "enable_thinking", "stream_channels")
 
@@ -185,20 +188,27 @@ class ShimMigrationTests(unittest.IsolatedAsyncioTestCase):
             {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,YWJj"}},
         ]}], 64, 0.0, 0.95)
 
-    def test_caption_request_uses_provider_template_without_thinking(self):
+    def test_caption_request_uses_processed_template_without_thinking(self):
         request = self.request()
         self.assertEqual(request.requests[0].image_buffers, [("decoded", b"abc")])
-        self.assertEqual([part.type for part in request.requests[0].messages[0].contents], ["text", "image"])
+        self.assertEqual([part.type for part in request.requests[0].messages[1].contents], ["text", "image"])
         self.assertEqual((request.max_generate_length, request.temperature, request.top_p), (64, 0.0, 0.95))
         self.assertTrue(request.apply_chat_template)
         self.assertTrue(request.add_generation_prompt)
         self.assertFalse(request.enable_thinking)
+        self.assertEqual(request.requests[0].messages[0].role, "system")
+        self.assertEqual(request.requests[0].messages[0].contents[0].content, "")
+        explicit = self.shim._build_request([
+            {"role": "system", "content": "Be concise."},
+            {"role": "user", "content": "Hello"}], 64, 0, 0.95)
+        self.assertEqual([m.role for m in explicit.requests[0].messages], ["system", "user"])
+        self.assertEqual(explicit.requests[0].messages[0].contents[0].content, "Be concise.")
 
     def test_legacy_engine_fails_before_runtime_construction(self):
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "processed_chat_template.json").write_text("{}")
             with patch.object(self.shim, "ENGINE_DIR", directory):
-                with self.assertRaisesRegex(RuntimeError, "rebuild.*v0.11.0"):
+                with self.assertRaisesRegex(RuntimeError, "rebuild.*v0.10.0"):
                     self.shim._init_runtime()
             self.assertIsNone(self.shim._runtime)
 

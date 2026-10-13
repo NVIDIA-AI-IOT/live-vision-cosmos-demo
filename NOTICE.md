@@ -40,22 +40,19 @@ copyright notice remains in the file. The quantizer is separate from TensorRT-Ed
 
 ## NVIDIA inference and model components
 
-[NVIDIA TensorRT-Edge-LLM v0.11.0](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/95515c2f87fba8982db5a519f9022277667b3cc9)
+[NVIDIA TensorRT-Edge-LLM v0.10.0](https://github.com/NVIDIA/TensorRT-Edge-LLM/tree/71dd1bae032e70771265917ec74d3ff4cad07a10)
 is the software development kit (SDK) used for model export, engine building and
 native inference. Setup downloads it at commit
-`95515c2f87fba8982db5a519f9022277667b3cc9`. Its Apache-2.0 license and all component
+`71dd1bae032e70771265917ec74d3ff4cad07a10`. Its Apache-2.0 license and all component
 notices remain in the downloaded checkout, including:
 
 | Component | License / attribution |
 |---|---|
-| Inja | MIT; Copyright (c) 2018-2025 Lars Berscheid. The SDK retains its modified source and license. |
-| XGrammar and DLPack | Apache-2.0; respective upstream notices remain in the SDK checkout. |
-| picojson | BSD-2-Clause. |
-| nlohmann/json and cpptrace | MIT. |
+| nlohmann/json | MIT. |
 | NVTX | Apache-2.0 with LLVM exception. |
 | googletest | BSD-3-Clause. |
 
-The SDK's export/tools extras install Torch, ONNX, ModelOpt and related Python
+The SDK's base dependencies and `tools` extra install Torch, ONNX, ModelOpt and related Python
 packages. Their installed licenses apply independently: audio dependencies include
 LGPL libsndfile and SoXR; NumPy/SciPy wheels include BSD components and GCC runtimes
 with the GCC Runtime Library Exception; tqdm includes MPL-2.0 and MIT terms.
@@ -63,7 +60,7 @@ Preserve complete package notices and applicable exception text. The source
 installer excludes unused SDK video-server extras. The fixed-engine container
 uses a smaller dependency set, declared in `container/build-runtime.sh`.
 
-The separately installed [NVIDIA CUTLASS DSL 4.7.0 Python package](https://pypi.org/project/nvidia-cutlass-dsl/4.7.0/)
+The separately installed [NVIDIA CUTLASS DSL 4.6.1 Python package](https://pypi.org/project/nvidia-cutlass-dsl/4.6.1/)
 and its `nvidia-cutlass-dsl-libs-*` packages use the proprietary NVIDIA Software
 License Agreement supplied in their distributions. These package terms are
 distinct from the CUTLASS C++ source license. Preserve their original license

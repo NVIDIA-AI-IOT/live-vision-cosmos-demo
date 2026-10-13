@@ -22,10 +22,10 @@ REQUIRED = {
     "engines/reasoning/visual/visual.engine",
     "engines/reasoning/visual/config.json",
     "engines/reasoning/visual/preprocessor_config.json",
-    "engines/reasoning/chat_template.jinja",
+    "engines/reasoning/processed_chat_template.json",
     "model/config.json",
     "model/tokenizer.json",
-    "model/chat_template.jinja",
+    "model/processed_chat_template.json",
     "notices/LICENSE.OpenMDW",
     "notices/MODEL_CARD.md",
 }
@@ -80,7 +80,7 @@ def verify(root, spec=None, candidate_commit=None):
         raise ValueError("Bundle must identify its candidate Git commit")
     if candidate_commit is not None and manifest["candidate_commit"] != candidate_commit:
         raise ValueError("Bundle/image candidate commit mismatch")
-    for key in ("schema_version", "source_commit", "sdk_commit", "model", "target", "engine_config", "export_compatibility"):
+    for key in ("schema_version", "sdk_commit", "model", "target", "engine_config", "export_compatibility"):
         if manifest.get(key) != expected[key]:
             raise ValueError(f"Bundle/runtime mismatch: {key}")
     if type(manifest.get("int4_plugin_version")) is not int or manifest["int4_plugin_version"] not in (1, 2):
@@ -99,13 +99,19 @@ def verify(root, spec=None, candidate_commit=None):
     if any((root / name).stat().st_size == 0 for name in REQUIRED):
         raise ValueError("Required engine, template and checkpoint files must be nonempty")
     engine_root = root / "engines/reasoning"
-    provider = (root / "model/chat_template.jinja").read_bytes()
-    if not provider.strip() or (engine_root / "chat_template.jinja").read_bytes() != provider:
-        raise ValueError("Engine must retain the exported provider Jinja template unchanged")
-    for directory in (engine_root, root / "model"):
-        for name in ("processed_chat_template.json", "chat_template.model", "additional_chat_templates"):
-            if (directory / name).exists():
-                raise ValueError("Legacy chat template artifact is incompatible with SDK 0.11: " + name)
+    processed = root / "model/processed_chat_template.json"
+    if (engine_root / "processed_chat_template.json").read_bytes() != processed.read_bytes():
+        raise ValueError("Engine must retain the exported processed chat template unchanged")
+    data = json.loads(processed.read_text())
+    if (data.get("content_types", {}).get("image", {}).get("format") != "<|vision_start|><|image_pad|><|vision_end|>"
+            or not data.get("generation_prompt")
+            or not all(data.get("roles", {}).get(role, {}).get("prefix")
+                       and data.get("roles", {}).get(role, {}).get("suffix")
+                       for role in ("system", "user", "assistant"))):
+        raise ValueError("Incomplete processed chat template")
+    roles = data["roles"]
+    if roles["user"]["prefix"].startswith(roles["system"]["prefix"] + roles["system"]["suffix"]):
+        raise ValueError("Processed chat template repeats the empty system block; run export validation")
     config = json.loads((root / "engines/reasoning/config.json").read_text())
     builder = config.get("builder_config", {})
     if any(builder.get(key) != value for key, value in expected["engine_config"].items()):
