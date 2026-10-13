@@ -10,7 +10,7 @@ import sys
 import tempfile
 import types
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 SDK_COMMIT = "71dd1bae032e70771265917ec74d3ff4cad07a10"
@@ -169,7 +169,7 @@ class ShimMigrationTests(unittest.IsolatedAsyncioTestCase):
             load_image_from_bytes=lambda raw: ("decoded", raw),
             load_image_from_path=lambda name: ("decoded-file", name),
             StreamChannel=types.SimpleNamespace(create=FakeChannel),
-            FinishReason=types.SimpleNamespace(LENGTH="length"))
+            FinishReason=types.SimpleNamespace(LENGTH="length", END_ID="end_id"))
         modules = {"_edgellm_runtime": self.runtime,
                    "fastapi": types.SimpleNamespace(FastAPI=FakeApp, Request=object),
                    "fastapi.responses": types.SimpleNamespace(JSONResponse=FakeResponse,
@@ -211,6 +211,27 @@ class ShimMigrationTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaisesRegex(RuntimeError, "rebuild.*v0.10.0"):
                     self.shim._init_runtime()
             self.assertIsNone(self.shim._runtime)
+
+    async def test_nonstream_removes_only_terminal_eos_on_native_end_id(self):
+        for text, finish, expected, reason in (
+            ("READY<|im_end|>", "end_id", "READY", "stop"),
+            ('The marker is "<|im_end|>".<|im_end|>', "end_id", 'The marker is "<|im_end|>".', "stop"),
+            ("Literal <|im_end|><|im_end|>", "end_id", "Literal <|im_end|>", "stop"),
+            ("READY", "end_id", "READY", "stop"),
+            ("Literal <|im_end|>", "length", "Literal <|im_end|>", "length"),
+            ("Literal <|im_end|>", "stop_words", "Literal <|im_end|>", "stop"),
+        ):
+            with self.subTest(text=text, finish=finish):
+                native = types.SimpleNamespace(output_texts=[text], output_ids=[[1, 2, 3]],
+                                               prompt_token_counts=[8], finish_reasons=[finish])
+                self.shim._runtime = types.SimpleNamespace(handle_request=lambda req: native)
+                request = types.SimpleNamespace(json=AsyncMock(return_value={
+                    "messages": [{"role": "user", "content": "Reply briefly."}], "stream": False}))
+                response = await self.shim.chat_completions(request)
+                self.assertEqual(response["choices"][0]["message"]["content"], expected)
+                self.assertEqual(response["choices"][0]["finish_reason"], reason)
+                self.assertEqual(response["usage"], {"prompt_tokens": 8, "completion_tokens": 3,
+                                                     "total_tokens": 11})
 
     async def test_stream_keeps_server_native_timing_and_usage_contract(self):
         # Image decoding has finished before this clock starts. Neither the old

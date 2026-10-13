@@ -302,6 +302,10 @@ async def chat_completions(request: Request):
     try:
         fr = resp.finish_reasons[0]
         reason = "length" if fr == rt.FinishReason.LENGTH else "stop"
+        # v0.10's one-shot decoder can retain the Cosmos EOS token; its
+        # streaming decoder already filters it. Leave literal body text intact.
+        if fr == rt.FinishReason.END_ID:
+            text = text.removesuffix("<|im_end|>")
     except Exception:
         pass
 
