@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "name": "flite",
+  "version": "2.2",
+  "revision": "e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88",
+  "url": "https://codeload.github.com/festvox/flite/tar.gz/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88",
+  "sha256": "1eebf476797cea10b4706cfbb9db9ba34f7b8ccb1fe7e0069b0b7528e0b0be46",
+  "directory": "flite-e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88",
+  "voice": "slt",
+  "voice_directory": "lang/cmu_us_slt"
+}

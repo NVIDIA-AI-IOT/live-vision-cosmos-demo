@@ -1,0 +1,27 @@
+{
+  "jetpack": "7.2.1",
+  "l4t": "39.2.1",
+  "board": "jetson-orin-nano-devkit-super",
+  "module": "P3767-0005",
+  "fab": "300",
+  "board_revision": "T.1",
+  "chip_sku": "00:00:00:D5",
+  "ramcode": "2",
+  "downloads": [
+    {
+      "name": "Jetson_Linux_R39.2.1_aarch64.tbz2",
+      "url": "https://developer.nvidia.com/downloads/embedded/L4T/r39_Release_v2.1/release/Jetson_Linux_R39.2.1_aarch64.tbz2",
+      "sha256": "2e5619088ba88e85dab25247f033d70659b6f676ff835176a07766dcb0fdbe6b"
+    },
+    {
+      "name": "Tegra_Linux_Sample-Root-Filesystem_R39.2.1_aarch64.tbz2",
+      "url": "https://developer.nvidia.com/downloads/embedded/L4T/r39_Release_v2.1/release/Tegra_Linux_Sample-Root-Filesystem_R39.2.1_aarch64.tbz2",
+      "sha256": "58a6485b56c6d6b5ee8478e902eed0ed4984fd73135b88b76aeaa5c1f44be66e"
+    },
+    {
+      "name": "jammy-server-cloudimg-amd64.img",
+      "url": "https://cloud-images.ubuntu.com/jammy/20260918/jammy-server-cloudimg-amd64.img",
+      "sha256": "48c7e1ab2005bff1c5450bd6c74d0f38482f0d750e14f320367e3e1c795035f9"
+    }
+  ]
+}

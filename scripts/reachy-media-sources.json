@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "lame": {
+      "version": "3.100",
+      "url": "https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz",
+      "sha256": "ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e",
+      "filename": "lame-3.100.tar.gz",
+      "root": "lame-3.100",
+      "licenses": ["COPYING", "LICENSE"]
+    },
+    "ffmpeg": {
+      "version": "7.1.5",
+      "url": "https://ffmpeg.org/releases/ffmpeg-7.1.5.tar.xz",
+      "sha256": "de668509caf9e35e3cd162473441fdb29538c6d96ed080292b3cf9e6fc5d558f",
+      "filename": "ffmpeg-7.1.5.tar.xz",
+      "root": "ffmpeg-7.1.5",
+      "licenses": ["COPYING.LGPLv2.1", "COPYING.LGPLv3", "COPYING.GPLv2", "COPYING.GPLv3", "LICENSE.md"]
+    },
+    "pyav": {
+      "version": "13.1.0",
+      "url": "https://files.pythonhosted.org/packages/0c/9d/486d31e76784cc0ad943f420c5e05867263b32b37e2f4b0f7f22fdc1ca3a/av-13.1.0.tar.gz",
+      "sha256": "d3da736c55847d8596eb8c26c60e036f193001db3bc5c10da8665622d906c17e",
+      "filename": "av-13.1.0.tar.gz",
+      "root": "av-13.1.0",
+      "licenses": ["LICENSE.txt"]
+    }
+  },
+  "build_tools": ["Cython==3.0.11", "setuptools==75.1.0", "wheel==0.44.0"],
+  "lame_configure": ["--disable-static", "--enable-shared", "--disable-frontend", "--disable-decoder"],
+  "ffmpeg_configure": [
+    "--disable-gpl", "--disable-nonfree", "--disable-version3", "--disable-autodetect",
+    "--disable-static", "--enable-shared", "--disable-programs", "--disable-doc",
+    "--disable-debug", "--disable-everything", "--disable-network", "--disable-postproc",
+    "--enable-avcodec", "--enable-avformat", "--enable-avdevice", "--enable-avutil",
+    "--enable-avfilter", "--enable-swresample", "--enable-swscale",
+    "--enable-libmp3lame",
+    "--enable-decoder=h264,pcm_alaw,pcm_mulaw,pcm_s16le",
+    "--enable-encoder=mjpeg,libmp3lame,pcm_alaw,pcm_mulaw",
+    "--enable-parser=h264", "--enable-muxer=mjpeg,mp3",
+    "--enable-filter=abuffer,abuffersink,aformat,aresample", "--enable-protocol=file,pipe"
+  ]
+}

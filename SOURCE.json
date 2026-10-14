@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/NVIDIA-AI-IOT/live-vision-cosmos-demo",
+  "upstream_repository": "https://github.com/nv-asotelo/live-vision-cosmos-demo",
+  "upstream_commit": "da489361cee0755f9215cccb7e76757f45728d3f",
+  "license": "Apache-2.0",
+  "third_party_sources": [
+    {
+      "name": "Reachy Mini Home Assistant WebRTC client",
+      "repository": "https://github.com/pollen-robotics/reachy_mini_homeassistant",
+      "source_reference_commit": "855c1c09fdd503e15cf1fac7a733ae7918d4784c",
+      "reference_note": "Copied source bodies match this reference; original import revision is unrecorded.",
+      "files": [
+        {
+          "local": "reachy/reachy_stream/const.py",
+          "upstream": "custom_components/reachy_mini/const.py",
+          "changes": "License and provenance headers"
+        },
+        {
+          "local": "reachy/reachy_stream/stream.py",
+          "upstream": "custom_components/reachy_mini/stream.py",
+          "changes": "License and provenance headers"
+        }
+      ],
+      "license": "Apache-2.0",
+      "copyright": "Copyright 2026 Pollen Robotics",
+      "license_file": "reachy/reachy_stream/LICENSE"
+    }
+  ],
+  "nvidia_source_references": [
+    {
+      "name": "Live VLM WebUI prompt labels and text",
+      "repository": "https://github.com/NVIDIA-AI-IOT/live-vlm-webui",
+      "source_reference_commit": "2fd5ba0b334c334d24bf0f9439d8742b243d22be",
+      "files": [
+        {
+          "local": "ui/web/app.js",
+          "upstream": "static/index.html#promptPreset",
+          "changes": "Prompt labels and text incorporated into the application UI"
+        }
+      ],
+      "license": "Apache-2.0",
+      "copyright": "Copyright (c) 2025 NVIDIA Corporation & Affiliates. All rights reserved."
+    }
+  ],
+  "demonstration_media_manifest": "docs/media/manifest.json"
+}

@@ -1,0 +1,32 @@
+{
+  "schema_version": 3,
+  "sdk_commit": "71dd1bae032e70771265917ec74d3ff4cad07a10",
+  "model": {
+    "id": "nvidia/Cosmos3-Edge",
+    "revision": "344d602b128d1bbdacb43b08d0a3626f46343e29",
+    "license": "OpenMDW-1.1",
+    "license_url": "https://openmdw.ai/license/1-1/"
+  },
+  "target": {
+    "architecture": "aarch64",
+    "board": "jetson-orin-nano-super-8gb",
+    "jetpack": "7.2.1",
+    "compute_capability": "8.7",
+    "l4t": "39.2.1",
+    "cuda": "13.2",
+    "tensorrt": "10.16.2.10"
+  },
+  "engine_config": {
+    "max_batch_size": 1,
+    "max_input_len": 1024,
+    "max_kv_cache_capacity": 1024,
+    "max_kv_pool_pages": 8
+  },
+  "export_compatibility": {
+    "visual_layout": "CHW",
+    "sdk_visual_module": "tensorrt_edgellm/models/cosmos3_reasoner/modeling_cosmos3_reasoner_visual.py",
+    "original_sha256": "ae2325a659f57444cf562407c64bcc5f835b76607c53925c7c8dcc789d120f47",
+    "corrected_sha256": "cf64ded55bd39cd8a1910b47340f5bab47207f12131a8f362525212e5fd55917",
+    "chat_template": "processed-json"
+  }
+}

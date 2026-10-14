@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+[Unit]
+Description=Cosmos3-Edge TensorRT-Edge-LLM serving shim (OpenAI-compatible)
+After=network.target
+
+[Service]
+Type=simple
+# REPLACE with the account you cloned this repo and built the engine as.
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+WorkingDirectory=/opt/live-vision-cosmos-demo
+# Runs via TensorRT-Edge-LLM's own venv (has the tensorrt_edgellm Python bindings the shim needs -
+# see README "1. Build TensorRT-Edge-LLM and the Cosmos3-Edge engine" for how this venv gets
+# built; it is not part of this repo, it is a build output of NVIDIA's TensorRT-Edge-LLM SDK).
+ExecStart=/opt/live-vision-cosmos-demo/external/TensorRT-Edge-LLM/.venv/bin/python \
+  /opt/live-vision-cosmos-demo/shim/cosmos3_shim_v1.py
+Restart=on-failure
+RestartSec=5
+# The engine is a few GB resident; see systemd/dropins/ for why it must not be allowed to swap.
+
+[Install]
+WantedBy=multi-user.target

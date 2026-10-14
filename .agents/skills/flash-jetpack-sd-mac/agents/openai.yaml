@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flash JetPack SD from Mac"
+  short_description: "Prepare clean Orin Nano Super SD media from macOS"
+  default_prompt: "Use $flash-jetpack-sd-mac to prepare a clean JetPack SD card for my Orin Nano Super."
