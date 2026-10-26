@@ -38,6 +38,30 @@ reachy-media/current/venv/bin/python3 -B scripts/verify-reachy-media.py \
 The checks cover H.264 decoding, JPEG previews, MP3 streaming and audio resampling.
 After an update, also try a live robot camera frame and microphone stream.
 
+### Security updates
+
+The bridge pins `aiohttp==3.14.5`, which includes the upstream fixes for
+[CVE-2026-111064](https://github.com/aio-libs/aiohttp/security/advisories/GHSA-5wr8-gcqf-gqf3)
+and
+[CVE-2026-111066](https://github.com/aio-libs/aiohttp/security/advisories/GHSA-9xw5-w5jj-pvcg).
+Its required `yarl` dependency is pinned to `1.25.1`.
+
+For an existing installation, refresh the source checkout and run the
+`--reachy-only` command above. The installer includes `reachy/requirements.txt`
+in its preparation revision, so changed pins trigger a new verified media build
+and restart an active bridge. This preserves the private FFmpeg/PyAV build;
+the model engine needs no rebuild.
+
+After the update, check the selected environment and bridge as the installation
+owner on the Orin:
+
+```sh
+cd /opt/live-vision-cosmos-demo
+reachy-media/current/venv/bin/python3 -m pip check
+reachy-media/current/venv/bin/python3 -c 'import aiohttp, yarl; print("aiohttp", aiohttp.__version__, "yarl", yarl.__version__)'
+curl -fsS http://127.0.0.1:8099/healthz
+```
+
 ## Sources, notices and library replacement
 
 Each build retains the original source archives, license files, build commands,
